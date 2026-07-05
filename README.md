@@ -24,6 +24,12 @@ The inference scripts expect a vLLM OpenAI-compatible server by default at:
 http://localhost:8090/v1
 ```
 
+Start the local vLLM server with:
+
+```bash
+bash inference/run_vllm.sh
+```
+
 If the server runs elsewhere, pass `--base-url`.
 
 ## Data Layout
@@ -178,7 +184,7 @@ Default behavior:
 Script:
 
 ```bash
-uv run python inference/run_load_test.py
+uv run python inference/run_infer_batched.py
 ```
 
 Default behavior:
@@ -197,30 +203,30 @@ Common commands:
 
 ```bash
 # Full run, resume-safe: skip predictions already present.
-uv run python inference/run_load_test.py
+uv run python inference/run_infer_batched.py
 
 # Full run, overwrite existing predictions.
-uv run python inference/run_load_test.py --overwrite
+uv run python inference/run_infer_batched.py --overwrite
 
 # Parallel run.
-uv run python inference/run_load_test.py --workers 4 --overwrite
+uv run python inference/run_infer_batched.py --workers 4 --overwrite
 
 # Longer per-request timeout.
-uv run python inference/run_load_test.py --workers 4 --overwrite --timeout-seconds 30
+uv run python inference/run_infer_batched.py --workers 4 --overwrite --timeout-seconds 30
 
 # Limit generated transcription tokens.
-uv run python inference/run_load_test.py --workers 4 --overwrite --max-tokens 512
+uv run python inference/run_infer_batched.py --workers 4 --overwrite --max-tokens 512
 
 # Smoke test on the first N eligible files.
-uv run python inference/run_load_test.py --num-files 20 --overwrite
+uv run python inference/run_infer_batched.py --num-files 20 --overwrite
 
 # Use a custom server or model.
-uv run python inference/run_load_test.py \
+uv run python inference/run_infer_batched.py \
   --base-url http://localhost:8090/v1 \
   --model Qwen/Qwen3-ASR-1.7B
 
 # Read from and write to custom directories.
-uv run python inference/run_load_test.py \
+uv run python inference/run_infer_batched.py \
   --input-root data/prepared_data \
   --output-root data/predicted_custom \
   --workers 4 \
@@ -234,7 +240,7 @@ from each audio file. Files shorter than or equal to the clip length are skipped
 
 ```bash
 # Send only first 10 seconds of each eligible audio file.
-uv run python inference/run_load_test.py \
+uv run python inference/run_infer_batched.py \
   --uniform-audio-length 10 \
   --workers 4 \
   --overwrite
@@ -252,21 +258,21 @@ RMS less than or equal to that value are skipped before submission to vLLM.
 
 ```bash
 # Disable most no-speech filtering.
-uv run python inference/run_load_test.py \
+uv run python inference/run_infer_batched.py \
   --uniform-audio-length 10 \
   --no-speech-rms-threshold 0 \
   --workers 4 \
   --overwrite
 
 # More aggressive no-speech filtering.
-uv run python inference/run_load_test.py \
+uv run python inference/run_infer_batched.py \
   --uniform-audio-length 10 \
   --no-speech-rms-threshold 5 \
   --workers 4 \
   --overwrite
 
 # Override clipped output directory.
-uv run python inference/run_load_test.py \
+uv run python inference/run_infer_batched.py \
   --uniform-audio-length 10 \
   --output-root data/predicted_10s_custom \
   --workers 4 \
@@ -276,7 +282,7 @@ uv run python inference/run_load_test.py \
 All load-test options:
 
 ```bash
-uv run python inference/run_load_test.py \
+uv run python inference/run_infer_batched.py \
   --input-root data/prepared_data \
   --output-root data/predicted \
   --model Qwen/Qwen3-ASR-1.7B \
@@ -349,21 +355,21 @@ Prepare data, run inference, score predictions:
 
 ```bash
 uv run python data/read_data.py
-uv run python inference/run_load_test.py --workers 4 --overwrite --timeout-seconds 30
+uv run python inference/run_infer_batched.py --workers 4 --overwrite --timeout-seconds 30
 uv run python eval/compute_error_rates.py data/predicted
 ```
 
 Run a short smoke test:
 
 ```bash
-uv run python inference/run_load_test.py --num-files 20 --workers 4 --overwrite
+uv run python inference/run_infer_batched.py --num-files 20 --workers 4 --overwrite
 uv run python eval/compute_error_rates.py data/predicted
 ```
 
 Run clipped 10-second inference and score it:
 
 ```bash
-uv run python inference/run_load_test.py \
+uv run python inference/run_infer_batched.py \
   --uniform-audio-length 10 \
   --workers 4 \
   --overwrite \

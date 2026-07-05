@@ -1,0 +1,1 @@
+vllm serve Qwen/Qwen3-ASR-1.7B --port 8090 --host 0.0.0.0

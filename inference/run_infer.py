@@ -1,20 +1,21 @@
 import argparse
 from io import BytesIO
-from math import sqrt
 from pathlib import Path
-import re
-import struct
 from time import perf_counter
 from typing import NamedTuple
-import wave
 
+from audio_utils import audio_bytes_length_seconds
+from audio_utils import audio_length_seconds
+from audio_utils import audio_rms
+from audio_utils import clean_transcription_text
+from audio_utils import clipped_audio_bytes
+from audio_utils import extract_stream_text
 from openai import OpenAI
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_ROOT = REPO_ROOT / "data" / "prepared_data"
-ASR_TEXT_START = "<asr_text>"
-ASR_TEXT_END = "</asr_text>"
+WARMUP_AUDIO_COUNT = 20
 
 
 class PreparedAudio(NamedTuple):
@@ -48,47 +49,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def audio_length_seconds(audio_path: Path) -> float:
-    with wave.open(str(audio_path), "rb") as audio_file:
-        return audio_file.getnframes() / audio_file.getframerate()
-
-
-def audio_bytes_length_seconds(audio_bytes: bytes) -> float:
-    with wave.open(BytesIO(audio_bytes), "rb") as audio_file:
-        return audio_file.getnframes() / audio_file.getframerate()
-
-
-def clipped_audio_bytes(audio_path: Path, duration_s: float) -> bytes:
-    clipped_file = BytesIO()
-    with wave.open(str(audio_path), "rb") as source:
-        num_frames = int(duration_s * source.getframerate())
-        frames = source.readframes(num_frames)
-        with wave.open(clipped_file, "wb") as target:
-            target.setparams(source.getparams())
-            target.writeframes(frames)
-    clipped_file.seek(0)
-    return clipped_file.read()
-
-
-def audio_rms(audio_bytes: bytes) -> int:
-    with wave.open(BytesIO(audio_bytes), "rb") as audio_file:
-        frames = audio_file.readframes(audio_file.getnframes())
-        sample_width = audio_file.getsampwidth()
-    if not frames:
-        return 0
-    if sample_width == 1:
-        samples = [sample - 128 for sample in frames]
-    elif sample_width == 2:
-        sample_count = len(frames) // sample_width
-        samples = struct.unpack(f"<{sample_count}h", frames[: sample_count * sample_width])
-    elif sample_width == 4:
-        sample_count = len(frames) // sample_width
-        samples = struct.unpack(f"<{sample_count}i", frames[: sample_count * sample_width])
-    else:
-        raise ValueError(f"Unsupported WAV sample width: {sample_width}")
-    return int(sqrt(sum(sample * sample for sample in samples) / len(samples)))
-
-
 def prepare_audio(
     audio_path: Path,
     uniform_audio_length: float | None,
@@ -105,44 +65,6 @@ def prepare_audio(
         audio_bytes=audio_bytes,
         audio_seconds=audio_bytes_length_seconds(audio_bytes),
     )
-
-
-def extract_stream_text(event: object) -> str:
-    delta = getattr(event, "delta", None)
-    if isinstance(delta, str):
-        return delta
-
-    text = getattr(event, "text", None)
-    if isinstance(text, str):
-        return text
-
-    if not hasattr(event, "model_dump"):
-        return ""
-
-    data = event.model_dump()
-    choices = data.get("choices") or []
-    if not choices:
-        return ""
-
-    choice = choices[0]
-    delta = choice.get("delta") or {}
-    content = delta.get("content")
-    if isinstance(content, str):
-        return content
-
-    text = choice.get("text")
-    if isinstance(text, str):
-        return text
-
-    return ""
-
-
-def clean_transcription_text(text: str) -> str:
-    text = re.sub(r"\blanguage [^<]*<asr_text>", "", text)
-    text = text.replace(ASR_TEXT_START, "")
-    if ASR_TEXT_END in text:
-        text = text.split(ASR_TEXT_END, 1)[0]
-    return text
 
 
 def transcribe_audio(
@@ -250,24 +172,63 @@ def main() -> None:
             f"({len(audio_paths)}/{all_audio_count} files longer than this)"
         )
 
-    if args.num_files is not None:
-        audio_paths = audio_paths[: args.num_files]
-
     print_text = args.print_text
     if print_text is None:
         print_text = args.audio_path is not None
 
-    print(f"Preparing {len(audio_paths)} audio files")
-    prepared_results = [
-        prepare_audio(
+    warmup_count = 0 if args.audio_path is not None else WARMUP_AUDIO_COUNT
+    required_payload_count = (
+        None if args.num_files is None else warmup_count + args.num_files
+    )
+
+    if required_payload_count is None:
+        print(f"Preparing all {len(audio_paths)} eligible audio files")
+    else:
+        print(
+            f"Preparing {required_payload_count} usable audio payloads "
+            f"from {len(audio_paths)} eligible files "
+            f"(warmup={warmup_count} measured={args.num_files})"
+        )
+
+    prepared_audio: list[PreparedAudio] = []
+    skipped_no_speech = 0
+    for path in audio_paths:
+        prepared = prepare_audio(
             path,
             args.uniform_audio_length,
             args.no_speech_rms_threshold,
         )
-        for path in audio_paths
-    ]
-    prepared_audio = [audio for audio in prepared_results if audio is not None]
-    skipped_no_speech = len(prepared_results) - len(prepared_audio)
+        if prepared is None:
+            skipped_no_speech += 1
+            continue
+        prepared_audio.append(prepared)
+        if (
+            required_payload_count is not None
+            and len(prepared_audio) >= required_payload_count
+        ):
+            break
+
+    if len(prepared_audio) < warmup_count:
+        raise ValueError(
+            f"Need {warmup_count} usable warmup audio payloads, "
+            f"found {len(prepared_audio)} after filtering"
+        )
+    if required_payload_count is not None and len(prepared_audio) < required_payload_count:
+        raise ValueError(
+            f"Need {args.num_files} usable benchmark audio payloads after "
+            f"{warmup_count} warmup payloads, found "
+            f"{max(0, len(prepared_audio) - warmup_count)}"
+        )
+
+    warmup_audio = prepared_audio[:warmup_count]
+    measured_audio = prepared_audio[warmup_count:]
+    if args.num_files is not None:
+        measured_audio = measured_audio[: args.num_files]
+
+    print(
+        f"Prepared {len(warmup_audio) + len(measured_audio)} audio payloads "
+        f"(warmup={len(warmup_audio)} measured={len(measured_audio)})"
+    )
     if skipped_no_speech:
         print(
             "Skipped "
@@ -279,12 +240,41 @@ def main() -> None:
     latencies_s: list[float] = []
     ttfts_s: list[float] = []
     audio_seconds_total = 0.0
+    warmup_completed = 0
+    warmup_failed = 0
     completed = 0
     failed = 0
-    total = len(prepared_audio)
+    total = len(measured_audio)
+
+    if warmup_audio:
+        print(f"Warming up with {len(warmup_audio)} audio files")
+        for index, audio in enumerate(warmup_audio, start=1):
+            try:
+                transcribe_audio(
+                    client,
+                    audio,
+                    model=args.model,
+                    stream=args.stream,
+                    timeout_seconds=args.timeout_seconds,
+                    max_tokens=args.max_tokens,
+                )
+            except Exception as exc:
+                warmup_failed += 1
+                print(
+                    f"[warmup {index}/{len(warmup_audio)}] failed: "
+                    f"{display_path(audio.audio_path)} "
+                    f"error={type(exc).__name__}: {exc}"
+                )
+                continue
+
+            warmup_completed += 1
+            print(
+                f"[warmup {index}/{len(warmup_audio)}] done: "
+                f"{display_path(audio.audio_path)}"
+            )
 
     inference_start_time = perf_counter()
-    for index, audio in enumerate(prepared_audio, start=1):
+    for index, audio in enumerate(measured_audio, start=1):
         try:
             result = transcribe_audio(
                 client,
@@ -324,6 +314,8 @@ def main() -> None:
     inference_wall_s = perf_counter() - inference_start_time
     print(
         "Done. "
+        f"warmup_completed={warmup_completed} "
+        f"warmup_failed={warmup_failed} "
         f"completed={completed} "
         f"failed={failed} "
         f"skipped_no_speech={skipped_no_speech}"

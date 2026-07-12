@@ -2,15 +2,18 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from math import ceil
-from math import sqrt
 from pathlib import Path
 from queue import Queue
-import struct
 from threading import Thread
 from time import perf_counter
 from typing import NamedTuple
-import wave
 
+from audio_utils import audio_bytes_length_seconds
+from audio_utils import audio_length_seconds
+from audio_utils import audio_rms
+from audio_utils import clean_transcription_text
+from audio_utils import clipped_audio_bytes
+from audio_utils import extract_stream_text
 from openai import APITimeoutError, OpenAI
 
 
@@ -18,6 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_ROOT = REPO_ROOT / "data" / "prepared_data"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "data" / "predicted"
 STOP_WRITER = object()
+WARMUP_AUDIO_COUNT = 20
 
 
 class WriteJob(NamedTuple):
@@ -34,11 +38,13 @@ class PreparedInferenceJob(NamedTuple):
     audio_path: Path
     output_path: Path
     audio_bytes: bytes
+    audio_seconds: float
 
 
 class InferenceResult(NamedTuple):
     status: str
     latency_s: float | None = None
+    ttft_s: float | None = None
     audio_seconds: float | None = None
 
 
@@ -48,6 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument("--model", default="Qwen/Qwen3-ASR-1.7B")
     parser.add_argument("--base-url", default="http://localhost:8090/v1")
+    parser.add_argument("--stream", action="store_true")
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--num-files", type=int, default=None)
     parser.add_argument("--uniform-audio-length", type=float, default=None)
@@ -67,43 +74,6 @@ def prediction_path(audio_path: Path, input_root: Path, output_root: Path) -> Pa
     return output_root / relative_path.with_suffix(".txt")
 
 
-def audio_length_seconds(audio_path: Path) -> float:
-    with wave.open(str(audio_path), "rb") as audio_file:
-        return audio_file.getnframes() / audio_file.getframerate()
-
-
-def clipped_audio_bytes(audio_path: Path, duration_s: float) -> bytes:
-    clipped_file = BytesIO()
-    with wave.open(str(audio_path), "rb") as source:
-        num_frames = int(duration_s * source.getframerate())
-        frames = source.readframes(num_frames)
-        with wave.open(clipped_file, "wb") as target:
-            target.setparams(source.getparams())
-            target.writeframes(frames)
-    clipped_file.seek(0)
-    return clipped_file.read()
-
-
-def audio_rms(audio_bytes: bytes) -> int:
-    with wave.open(BytesIO(audio_bytes), "rb") as audio_file:
-        frames = audio_file.readframes(audio_file.getnframes())
-        sample_width = audio_file.getsampwidth()
-    if not frames:
-        return 0
-    if sample_width == 1:
-        samples = [sample - 128 for sample in frames]
-    elif sample_width == 2:
-        sample_count = len(frames) // sample_width
-        samples = struct.unpack(f"<{sample_count}h", frames[: sample_count * sample_width])
-    elif sample_width == 4:
-        sample_count = len(frames) // sample_width
-        samples = struct.unpack(f"<{sample_count}i", frames[: sample_count * sample_width])
-    else:
-        raise ValueError(f"Unsupported WAV sample width: {sample_width}")
-    return int(sqrt(sum(sample * sample for sample in samples) / len(samples)))
-
-
-
 def prepare_inference_job(
     job: InferenceJob,
     uniform_audio_length: float | None,
@@ -119,6 +89,7 @@ def prepare_inference_job(
         audio_path=job.audio_path,
         output_path=job.output_path,
         audio_bytes=audio_bytes,
+        audio_seconds=audio_bytes_length_seconds(audio_bytes),
     )
 
 
@@ -127,14 +98,53 @@ def transcribe_audio(
     *,
     model: str,
     base_url: str,
+    stream: bool,
     timeout_seconds: float,
     max_tokens: int,
     write_queue: Queue,
+    write_output: bool = True,
 ) -> InferenceResult:
     client = OpenAI(base_url=base_url, api_key="EMPTY")
 
     with BytesIO(job.audio_bytes) as audio_file:
         audio_file.name = job.audio_path.name
+        if stream:
+            stream_start = perf_counter()
+            stream_response = client.audio.transcriptions.create(
+                model=model,
+                file=audio_file,
+                stream=True,
+                extra_body={"max_completion_tokens": max_tokens},
+                timeout=timeout_seconds,
+            )
+
+            ttft_s = None
+            text_parts = []
+            final_text = None
+            for event in stream_response:
+                delta = extract_stream_text(event)
+                if delta:
+                    text_parts.append(delta)
+                    if ttft_s is None and clean_transcription_text("".join(text_parts)):
+                        ttft_s = perf_counter() - stream_start
+
+                event_type = getattr(event, "type", None)
+                if event_type == "transcript.text.done":
+                    event_text = getattr(event, "text", None)
+                    if event_text:
+                        final_text = event_text
+
+            latency_s = perf_counter() - stream_start
+            text = final_text if final_text is not None else "".join(text_parts)
+            if write_output:
+                write_queue.put(WriteJob(job.output_path, clean_transcription_text(text)))
+            return InferenceResult(
+                status="queued" if write_output else "done",
+                latency_s=latency_s,
+                ttft_s=ttft_s,
+                audio_seconds=job.audio_seconds,
+            )
+
         start_time = perf_counter()
         transcription = client.audio.transcriptions.create(
             model=model,
@@ -144,13 +154,14 @@ def transcribe_audio(
         )
         latency_s = perf_counter() - start_time
 
-    write_queue.put(WriteJob(job.output_path, transcription.text))
+    if write_output:
+        write_queue.put(WriteJob(job.output_path, transcription.text))
     usage = getattr(transcription, "usage", None)
     audio_seconds = getattr(usage, "seconds", None)
     return InferenceResult(
-        status="queued",
+        status="queued" if write_output else "done",
         latency_s=latency_s,
-        audio_seconds=audio_seconds,
+        audio_seconds=audio_seconds or job.audio_seconds,
     )
 
 
@@ -219,39 +230,68 @@ def main() -> None:
         eligible_audio_paths = all_audio_paths
 
     skipped_existing = 0
-    jobs: list[InferenceJob] = []
-    for audio_path in eligible_audio_paths:
-        output_path = prediction_path(audio_path, input_root, output_root)
-        if output_path.exists() and not args.overwrite:
-            skipped_existing += 1
-            continue
-        jobs.append(InferenceJob(audio_path, output_path))
-
-    if args.num_files is not None:
-        jobs = jobs[: args.num_files]
+    skipped_no_speech = 0
+    prepared_warmup_jobs: list[PreparedInferenceJob] = []
+    prepared_jobs: list[PreparedInferenceJob] = []
 
     print(f"Found {len(all_audio_paths)} wav files under {input_root}")
-    print(f"Preparing {len(jobs)} eligible files")
-    if skipped_existing:
-        print(f"Skipping {skipped_existing} files with existing predictions")
+    if args.num_files is None:
+        print(
+            f"Preparing usable audio payloads from {len(eligible_audio_paths)} "
+            f"eligible files (warmup={WARMUP_AUDIO_COUNT} measured=all remaining)"
+        )
+    else:
+        print(
+            f"Preparing {WARMUP_AUDIO_COUNT + args.num_files} usable audio payloads "
+            f"from {len(eligible_audio_paths)} eligible files "
+            f"(warmup={WARMUP_AUDIO_COUNT} measured={args.num_files})"
+        )
     print(f"Writing predictions under {output_root}")
 
     prepare_start_time = perf_counter()
-    prepared_results = [
-        prepare_inference_job(
-            job,
+    for audio_path in eligible_audio_paths:
+        output_path = prediction_path(audio_path, input_root, output_root)
+        if (
+            len(prepared_warmup_jobs) >= WARMUP_AUDIO_COUNT
+            and output_path.exists()
+            and not args.overwrite
+        ):
+            skipped_existing += 1
+            continue
+        prepared = prepare_inference_job(
+            InferenceJob(audio_path, output_path),
             args.uniform_audio_length,
             args.no_speech_rms_threshold,
         )
-        for job in jobs
-    ]
-    prepared_jobs = [job for job in prepared_results if job is not None]
-    skipped_no_speech = len(prepared_results) - len(prepared_jobs)
+        if prepared is None:
+            skipped_no_speech += 1
+            continue
+        if len(prepared_warmup_jobs) < WARMUP_AUDIO_COUNT:
+            prepared_warmup_jobs.append(prepared)
+            continue
+        prepared_jobs.append(prepared)
+        if args.num_files is not None and len(prepared_jobs) >= args.num_files:
+            break
+
     prepare_wall_s = perf_counter() - prepare_start_time
+    if len(prepared_warmup_jobs) < WARMUP_AUDIO_COUNT:
+        raise ValueError(
+            f"Need {WARMUP_AUDIO_COUNT} usable warmup audio payloads, "
+            f"found {len(prepared_warmup_jobs)} after filtering"
+        )
+    if args.num_files is not None and len(prepared_jobs) < args.num_files:
+        raise ValueError(
+            f"Need {args.num_files} usable benchmark audio payloads after "
+            f"{WARMUP_AUDIO_COUNT} warmup payloads, found {len(prepared_jobs)}"
+        )
+
     print(
-        f"Prepared {len(prepared_jobs)} audio payloads "
+        f"Prepared {len(prepared_warmup_jobs) + len(prepared_jobs)} audio payloads "
+        f"(warmup={len(prepared_warmup_jobs)} measured={len(prepared_jobs)}) "
         f"in {prepare_wall_s:.3f}s before vLLM submission"
     )
+    if skipped_existing:
+        print(f"Skipping {skipped_existing} files with existing predictions")
     if skipped_no_speech:
         print(
             "Skipped "
@@ -261,14 +301,18 @@ def main() -> None:
 
     total = len(prepared_jobs)
     print(
-        f"Submitting {total} files to vLLM "
+        f"Submitting {total} measured files to vLLM "
         f"(timeout={args.timeout_seconds:g}s max_tokens={args.max_tokens})"
     )
 
+    warmup_completed = 0
+    warmup_failed = 0
+    warmup_timed_out = 0
     queued = 0
     failed = 0
     timed_out = 0
     latencies_s: list[float] = []
+    ttfts_s: list[float] = []
     audio_seconds_total = 0.0
     write_queue: Queue = Queue()
     writer_errors: list[tuple[Path | None, Exception]] = []
@@ -280,6 +324,44 @@ def main() -> None:
     writer_thread.start()
 
     try:
+        if prepared_warmup_jobs:
+            print(f"Warming up with {len(prepared_warmup_jobs)} audio files")
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                warmup_futures = {
+                    executor.submit(
+                        transcribe_audio,
+                        job,
+                        model=args.model,
+                        base_url=args.base_url,
+                        stream=args.stream,
+                        timeout_seconds=args.timeout_seconds,
+                        max_tokens=args.max_tokens,
+                        write_queue=write_queue,
+                        write_output=False,
+                    ): job
+                    for job in prepared_warmup_jobs
+                }
+
+                for index, future in enumerate(as_completed(warmup_futures), start=1):
+                    job = warmup_futures[future]
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        warmup_failed += 1
+                        if isinstance(exc, APITimeoutError):
+                            warmup_timed_out += 1
+                        print(
+                            f"[warmup {index}/{len(prepared_warmup_jobs)}] failed: "
+                            f"{job.audio_path.relative_to(input_root)} "
+                            f"error={type(exc).__name__}: {exc}"
+                        )
+                        continue
+                    warmup_completed += 1
+                    print(
+                        f"[warmup {index}/{len(prepared_warmup_jobs)}] "
+                        f"{result.status}: {job.audio_path.relative_to(input_root)}"
+                    )
+
         inference_start_time = perf_counter()
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
             futures = {
@@ -288,6 +370,7 @@ def main() -> None:
                     job,
                     model=args.model,
                     base_url=args.base_url,
+                    stream=args.stream,
                     timeout_seconds=args.timeout_seconds,
                     max_tokens=args.max_tokens,
                     write_queue=write_queue,
@@ -313,9 +396,16 @@ def main() -> None:
                     queued += 1
                     if result.latency_s is not None:
                         latencies_s.append(result.latency_s)
+                    if result.ttft_s is not None:
+                        ttfts_s.append(result.ttft_s)
                     if result.audio_seconds is not None:
                         audio_seconds_total += result.audio_seconds
-                    latency_label = f" latency={result.latency_s:.3f}s"
+                    labels = []
+                    if result.latency_s is not None:
+                        labels.append(f"latency={result.latency_s:.3f}s")
+                    if result.ttft_s is not None:
+                        labels.append(f"ttft={result.ttft_s:.3f}s")
+                    latency_label = f" {' '.join(labels)}" if labels else ""
                 else:
                     latency_label = ""
                 print(
@@ -335,6 +425,9 @@ def main() -> None:
 
     print(
         "Done. "
+        f"warmup_completed={warmup_completed} "
+        f"warmup_failed={warmup_failed} "
+        f"warmup_timed_out={warmup_timed_out} "
         f"queued_for_write={queued} "
         f"skipped_existing={skipped_existing} "
         f"skipped_no_speech={skipped_no_speech} "
@@ -358,6 +451,15 @@ def main() -> None:
             f"p90={percentile(latencies_s, 90):.3f}s "
             f"p99={percentile(latencies_s, 99):.3f}s"
         )
+        if ttfts_s:
+            print(
+                "TTFT: "
+                f"p50={percentile(ttfts_s, 50):.3f}s "
+                f"p90={percentile(ttfts_s, 90):.3f}s "
+                f"p99={percentile(ttfts_s, 99):.3f}s"
+            )
+        else:
+            print("TTFT: p50=n/a p90=n/a p99=n/a")
 
 
 if __name__ == "__main__":

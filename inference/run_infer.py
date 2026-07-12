@@ -17,7 +17,7 @@ from server_utils import reset_prefix_cache
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_ROOT = REPO_ROOT / "data" / "prepared_data"
-DEFAULT_OUTPUT_ROOT = REPO_ROOT / "data" / "sequential_predicted"
+DEFAULT_OUTPUT_ROOT = REPO_ROOT / "predictions" / "results" / "sequential_predicted"
 WARMUP_AUDIO_COUNT = 20
 
 

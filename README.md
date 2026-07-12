@@ -85,12 +85,6 @@ Script:
 uv run python inference/run_infer.py <audio_path>
 ```
 
-From the `inference/` directory, the same script can be run as:
-
-```bash
-uv run run_infer.py <audio_path>
-```
-
 Single-file example:
 
 ```bash
@@ -111,27 +105,11 @@ Streaming mode:
 uv run python inference/run_infer.py <audio_path> --stream
 ```
 
-Streaming mode from the `inference/` directory:
-
-```bash
-uv run run_infer.py <audio_path> --stream
-```
-
 Sequential directory mode:
 
 ```bash
 uv run python inference/run_infer.py \
   --input-root data/prepared_data \
-  --num-files 10 \
-  --stream \
-  --no-print-text
-```
-
-Sequential directory mode from the `inference/` directory:
-
-```bash
-uv run run_infer.py \
-  --input-root ../data/prepared_data \
   --num-files 10 \
   --stream \
   --no-print-text
@@ -151,18 +129,6 @@ Sequential streaming with clipping, RMS filtering, and no transcript printing:
 ```bash
 uv run python inference/run_infer.py \
   --input-root data/prepared_data/carta_september_2024 \
-  --num-files 10 \
-  --uniform-audio-length 10 \
-  --no-speech-rms-threshold 1 \
-  --stream \
-  --no-print-text
-```
-
-The same command from the `inference/` directory:
-
-```bash
-uv run run_infer.py \
-  --input-root ../data/prepared_data/carta_september_2024 \
   --num-files 10 \
   --uniform-audio-length 10 \
   --no-speech-rms-threshold 1 \

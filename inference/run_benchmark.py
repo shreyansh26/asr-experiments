@@ -16,8 +16,12 @@ DEFAULT_MODEL = "Qwen/Qwen3-ASR-1.7B"
 DEFAULT_BASE_URL = "http://localhost:8090/v1"
 DEFAULT_NO_SPEECH_RMS_THRESHOLD = 1
 DEFAULT_WORKERS = 1
-DEFAULT_SEQUENTIAL_OUTPUT_ROOT = REPO_ROOT / "data" / "sequential_predicted"
-DEFAULT_BATCHED_OUTPUT_ROOT = REPO_ROOT / "data" / "batched_predicted"
+DEFAULT_SEQUENTIAL_OUTPUT_ROOT = (
+    REPO_ROOT / "predictions" / "results" / "sequential_predicted"
+)
+DEFAULT_BATCHED_OUTPUT_ROOT = (
+    REPO_ROOT / "predictions" / "results" / "batched_predicted"
+)
 
 CSV_COLUMNS = [
     "timestamp_utc",
@@ -52,7 +56,19 @@ CSV_COLUMNS = [
     "ttft_p50_s",
     "ttft_p95_s",
     "ttft_p99_s",
+    "prediction_files",
+    "matched_files",
+    "missing_references",
+    "cer",
+    "cer_percent",
+    "cer_edits",
+    "cer_ref_chars",
+    "wer",
+    "wer_percent",
+    "wer_edits",
+    "wer_ref_words",
     "command",
+    "scoring_command",
 ]
 
 
@@ -133,6 +149,25 @@ def build_command(args: argparse.Namespace, output_root: Path) -> list[str]:
     return command
 
 
+def build_scoring_command(output_root: Path, ref_root: Path) -> list[str]:
+    return [
+        sys.executable,
+        "-u",
+        str(REPO_ROOT / "eval" / "compute_error_rates.py"),
+        str(output_root),
+        "--ref-root",
+        str(ref_root),
+    ]
+
+
+def should_score_error_rates(args: argparse.Namespace) -> bool:
+    return (
+        args.overwrite
+        and args.num_files is None
+        and args.uniform_audio_length is None
+    )
+
+
 def strip_seconds(value: str) -> str:
     return value[:-1] if value.endswith("s") and value != "n/a" else value
 
@@ -171,6 +206,38 @@ def parse_metrics(output: str) -> dict[str, str]:
             for percentile in ("p50", "p95", "p99"):
                 if percentile in metrics:
                     row[f"ttft_{percentile}_s"] = metrics[percentile]
+    return row
+
+
+def parse_error_metrics(output: str) -> dict[str, str]:
+    row: dict[str, str] = {}
+    for line in output.splitlines():
+        if line.startswith("Predicted text files: "):
+            row["prediction_files"] = line.rsplit(" ", 1)[-1]
+        elif line.startswith("Matched files: "):
+            row["matched_files"] = line.rsplit(" ", 1)[-1]
+        elif line.startswith("Missing references: "):
+            row["missing_references"] = line.rsplit(" ", 1)[-1]
+        elif line.startswith("CER: "):
+            match = re.search(
+                r"CER: ([0-9.]+|nan)(?: \(([0-9.]+|nan)%\))? \[(\d+)/(\d+)\]",
+                line,
+            )
+            if match:
+                row["cer"] = match.group(1)
+                row["cer_percent"] = match.group(2) or ""
+                row["cer_edits"] = match.group(3)
+                row["cer_ref_chars"] = match.group(4)
+        elif line.startswith("WER: "):
+            match = re.search(
+                r"WER: ([0-9.]+|nan)(?: \(([0-9.]+|nan)%\))? \[(\d+)/(\d+)\]",
+                line,
+            )
+            if match:
+                row["wer"] = match.group(1)
+                row["wer_percent"] = match.group(2) or ""
+                row["wer_edits"] = match.group(3)
+                row["wer_ref_words"] = match.group(4)
     return row
 
 
@@ -246,6 +313,12 @@ def main() -> None:
     output = run_command(command)
     row = {column: "" for column in CSV_COLUMNS}
     row.update(parse_metrics(output))
+    scoring_command: list[str] | None = None
+    if should_score_error_rates(args):
+        scoring_command = build_scoring_command(output_root, input_root)
+        print("Running error-rate evaluation")
+        scoring_output = run_command(scoring_command)
+        row.update(parse_error_metrics(scoring_output))
     row.update(
         {
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -263,6 +336,9 @@ def main() -> None:
             "num_files": "" if args.num_files is None else str(args.num_files),
             "no_speech_rms_threshold": str(args.no_speech_rms_threshold),
             "command": " ".join(command),
+            "scoring_command": (
+                "" if scoring_command is None else " ".join(scoring_command)
+            ),
         }
     )
     csv_path = append_csv(args.mode, row)

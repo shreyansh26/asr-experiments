@@ -1,5 +1,6 @@
 import argparse
 from io import BytesIO
+from math import ceil
 from pathlib import Path
 from time import perf_counter
 from typing import NamedTuple
@@ -11,10 +12,12 @@ from audio_utils import clean_transcription_text
 from audio_utils import clipped_audio_bytes
 from audio_utils import extract_stream_text
 from openai import OpenAI
+from server_utils import reset_prefix_cache
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_ROOT = REPO_ROOT / "data" / "prepared_data"
+DEFAULT_OUTPUT_ROOT = REPO_ROOT / "data" / "sequential_predicted"
 WARMUP_AUDIO_COUNT = 20
 
 
@@ -22,6 +25,7 @@ class PreparedAudio(NamedTuple):
     audio_path: Path
     audio_bytes: bytes
     audio_seconds: float
+    write_output: bool
 
 
 class InferenceResult(NamedTuple):
@@ -35,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("audio_path", nargs="?", help="Path to a local audio file")
     parser.add_argument("--input-root", type=Path, default=DEFAULT_INPUT_ROOT)
+    parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument("--model", default="Qwen/Qwen3-ASR-1.7B")
     parser.add_argument("--base-url", default="http://localhost:8090/v1")
     parser.add_argument("--stream", action="store_true")
@@ -43,16 +48,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--no-speech-rms-threshold", type=int, default=1)
+    parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--print-text", dest="print_text", action="store_true")
     parser.add_argument("--no-print-text", dest="print_text", action="store_false")
     parser.set_defaults(print_text=None)
     return parser.parse_args()
 
 
+def format_seconds(value: float) -> str:
+    return f"{value:g}".replace(".", "_")
+
+
+def prediction_path(audio_path: Path, input_root: Path, output_root: Path) -> Path:
+    relative_path = audio_path.relative_to(input_root)
+    return output_root / relative_path.with_suffix(".txt")
+
+
 def prepare_audio(
     audio_path: Path,
     uniform_audio_length: float | None,
     no_speech_rms_threshold: int,
+    write_output: bool = True,
 ) -> PreparedAudio | None:
     if uniform_audio_length is None:
         audio_bytes = audio_path.read_bytes()
@@ -64,6 +80,7 @@ def prepare_audio(
         audio_path=audio_path,
         audio_bytes=audio_bytes,
         audio_seconds=audio_bytes_length_seconds(audio_bytes),
+        write_output=write_output,
     )
 
 
@@ -134,6 +151,14 @@ def mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def percentile(values: list[float], percentile_value: int) -> float:
+    if not values:
+        return 0.0
+    sorted_values = sorted(values)
+    index = ceil((percentile_value / 100) * len(sorted_values)) - 1
+    return sorted_values[max(0, min(index, len(sorted_values) - 1))]
+
+
 def main() -> None:
     args = parse_args()
     if args.num_files is not None and args.num_files < 0:
@@ -151,12 +176,26 @@ def main() -> None:
         input_root = args.input_root.expanduser().resolve()
         if not input_root.is_dir():
             raise FileNotFoundError(f"Input root not found: {input_root}")
+        if args.output_root is not None:
+            output_root = args.output_root.expanduser().resolve()
+        elif args.uniform_audio_length is None:
+            output_root = DEFAULT_OUTPUT_ROOT
+        else:
+            suffix = format_seconds(args.uniform_audio_length)
+            output_root = (
+                DEFAULT_OUTPUT_ROOT.parent
+                / f"sequential_predicted_uniform_audio_length_{suffix}s"
+            )
         audio_paths = sorted(input_root.rglob("*.wav"))
         display_path = lambda path: path.relative_to(input_root)
     else:
+        if args.output_root is not None:
+            raise ValueError("--output-root cannot be used with a single audio path")
         audio_path = Path(args.audio_path).expanduser().resolve()
         if not audio_path.is_file():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
+        input_root = None
+        output_root = None
         audio_paths = [audio_path]
         display_path = lambda path: path
 
@@ -181,8 +220,11 @@ def main() -> None:
         None if args.num_files is None else warmup_count + args.num_files
     )
 
+    if output_root is not None:
+        print(f"Writing predictions under {output_root}")
+
     if required_payload_count is None:
-        print(f"Preparing all {len(audio_paths)} eligible audio files")
+        print(f"Preparing usable audio payloads from {len(audio_paths)} eligible files")
     else:
         print(
             f"Preparing {required_payload_count} usable audio payloads "
@@ -191,12 +233,22 @@ def main() -> None:
         )
 
     prepared_audio: list[PreparedAudio] = []
+    existing_not_written = 0
     skipped_no_speech = 0
     for path in audio_paths:
+        output_exists = (
+            output_root is not None
+            and input_root is not None
+            and len(prepared_audio) >= warmup_count
+            and prediction_path(path, input_root, output_root).exists()
+        )
+        if output_exists and not args.overwrite:
+            existing_not_written += 1
         prepared = prepare_audio(
             path,
             args.uniform_audio_length,
             args.no_speech_rms_threshold,
+            write_output=not output_exists or args.overwrite,
         )
         if prepared is None:
             skipped_no_speech += 1
@@ -229,12 +281,19 @@ def main() -> None:
         f"Prepared {len(warmup_audio) + len(measured_audio)} audio payloads "
         f"(warmup={len(warmup_audio)} measured={len(measured_audio)})"
     )
+    if existing_not_written:
+        print(
+            f"Not writing {existing_not_written} files with existing predictions"
+        )
     if skipped_no_speech:
         print(
             "Skipped "
             f"{skipped_no_speech} clipped no-speech payloads "
             f"(rms <= {args.no_speech_rms_threshold})"
         )
+
+    reset_endpoint = reset_prefix_cache(args.base_url)
+    print(f"Reset prefix cache: {reset_endpoint}")
 
     client = OpenAI(base_url=args.base_url, api_key="EMPTY")
     latencies_s: list[float] = []
@@ -308,6 +367,10 @@ def main() -> None:
             f"[{index}/{total}] done: "
             f"{display_path(audio.audio_path)} {' '.join(labels)}"
         )
+        if output_root is not None and input_root is not None and audio.write_output:
+            output_path = prediction_path(audio.audio_path, input_root, output_root)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(result.text.strip() + "\n", encoding="utf-8")
         if print_text:
             print(result.text)
 
@@ -318,6 +381,7 @@ def main() -> None:
         f"warmup_failed={warmup_failed} "
         f"completed={completed} "
         f"failed={failed} "
+        f"existing_not_written={existing_not_written} "
         f"skipped_no_speech={skipped_no_speech}"
     )
     if completed:
@@ -331,11 +395,23 @@ def main() -> None:
             f"throughput={files_per_second:.3f} files/s "
             f"audio_throughput={audio_seconds_per_second:.3f} audio_s/s"
         )
-        print(f"Latency: avg={mean(latencies_s):.3f}s")
+        print(
+            "Latency: "
+            f"avg={mean(latencies_s):.3f}s "
+            f"p50={percentile(latencies_s, 50):.3f}s "
+            f"p95={percentile(latencies_s, 95):.3f}s "
+            f"p99={percentile(latencies_s, 99):.3f}s"
+        )
         if ttfts_s:
-            print(f"TTFT: avg={mean(ttfts_s):.3f}s")
+            print(
+                "TTFT: "
+                f"avg={mean(ttfts_s):.3f}s "
+                f"p50={percentile(ttfts_s, 50):.3f}s "
+                f"p95={percentile(ttfts_s, 95):.3f}s "
+                f"p99={percentile(ttfts_s, 99):.3f}s"
+            )
         else:
-            print("TTFT: avg=n/a")
+            print("TTFT: avg=n/a p50=n/a p95=n/a p99=n/a")
 
 
 if __name__ == "__main__":

@@ -15,11 +15,12 @@ from audio_utils import clean_transcription_text
 from audio_utils import clipped_audio_bytes
 from audio_utils import extract_stream_text
 from openai import APITimeoutError, OpenAI
+from server_utils import reset_prefix_cache
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_ROOT = REPO_ROOT / "data" / "prepared_data"
-DEFAULT_OUTPUT_ROOT = REPO_ROOT / "data" / "predicted"
+DEFAULT_OUTPUT_ROOT = REPO_ROOT / "data" / "batched_predicted"
 STOP_WRITER = object()
 WARMUP_AUDIO_COUNT = 20
 
@@ -39,6 +40,7 @@ class PreparedInferenceJob(NamedTuple):
     output_path: Path
     audio_bytes: bytes
     audio_seconds: float
+    write_output: bool
 
 
 class InferenceResult(NamedTuple):
@@ -78,6 +80,7 @@ def prepare_inference_job(
     job: InferenceJob,
     uniform_audio_length: float | None,
     no_speech_rms_threshold: int,
+    write_output: bool = True,
 ) -> PreparedInferenceJob | None:
     if uniform_audio_length is None:
         audio_bytes = job.audio_path.read_bytes()
@@ -90,6 +93,7 @@ def prepare_inference_job(
         output_path=job.output_path,
         audio_bytes=audio_bytes,
         audio_seconds=audio_bytes_length_seconds(audio_bytes),
+        write_output=write_output,
     )
 
 
@@ -188,6 +192,10 @@ def percentile(values: list[float], percentile_value: int) -> float:
     return sorted_values[max(0, min(index, len(sorted_values) - 1))]
 
 
+def mean(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
 def main() -> None:
     args = parse_args()
     input_root = args.input_root.expanduser().resolve()
@@ -213,7 +221,10 @@ def main() -> None:
         output_root = DEFAULT_OUTPUT_ROOT
     else:
         suffix = format_seconds(args.uniform_audio_length)
-        output_root = DEFAULT_OUTPUT_ROOT.parent / f"predicted_uniform_audio_length_{suffix}s"
+        output_root = (
+            DEFAULT_OUTPUT_ROOT.parent
+            / f"batched_predicted_uniform_audio_length_{suffix}s"
+        )
 
     all_audio_paths = sorted(input_root.rglob("*.wav"))
     if args.uniform_audio_length is not None:
@@ -229,7 +240,7 @@ def main() -> None:
     else:
         eligible_audio_paths = all_audio_paths
 
-    skipped_existing = 0
+    existing_not_written = 0
     skipped_no_speech = 0
     prepared_warmup_jobs: list[PreparedInferenceJob] = []
     prepared_jobs: list[PreparedInferenceJob] = []
@@ -251,17 +262,17 @@ def main() -> None:
     prepare_start_time = perf_counter()
     for audio_path in eligible_audio_paths:
         output_path = prediction_path(audio_path, input_root, output_root)
-        if (
+        output_exists = (
             len(prepared_warmup_jobs) >= WARMUP_AUDIO_COUNT
             and output_path.exists()
-            and not args.overwrite
-        ):
-            skipped_existing += 1
-            continue
+        )
+        if output_exists and not args.overwrite:
+            existing_not_written += 1
         prepared = prepare_inference_job(
             InferenceJob(audio_path, output_path),
             args.uniform_audio_length,
             args.no_speech_rms_threshold,
+            write_output=not output_exists or args.overwrite,
         )
         if prepared is None:
             skipped_no_speech += 1
@@ -290,8 +301,10 @@ def main() -> None:
         f"(warmup={len(prepared_warmup_jobs)} measured={len(prepared_jobs)}) "
         f"in {prepare_wall_s:.3f}s before vLLM submission"
     )
-    if skipped_existing:
-        print(f"Skipping {skipped_existing} files with existing predictions")
+    if existing_not_written:
+        print(
+            f"Not writing {existing_not_written} files with existing predictions"
+        )
     if skipped_no_speech:
         print(
             "Skipped "
@@ -300,6 +313,9 @@ def main() -> None:
         )
 
     total = len(prepared_jobs)
+    reset_endpoint = reset_prefix_cache(args.base_url)
+    print(f"Reset prefix cache: {reset_endpoint}")
+
     print(
         f"Submitting {total} measured files to vLLM "
         f"(timeout={args.timeout_seconds:g}s max_tokens={args.max_tokens})"
@@ -309,6 +325,7 @@ def main() -> None:
     warmup_failed = 0
     warmup_timed_out = 0
     queued = 0
+    completed = 0
     failed = 0
     timed_out = 0
     latencies_s: list[float] = []
@@ -374,6 +391,7 @@ def main() -> None:
                     timeout_seconds=args.timeout_seconds,
                     max_tokens=args.max_tokens,
                     write_queue=write_queue,
+                    write_output=job.write_output,
                 ): job
                 for job in prepared_jobs
             }
@@ -392,8 +410,10 @@ def main() -> None:
                         f"error={type(exc).__name__}: {exc}"
                     )
                     continue
-                if result.status == "queued":
-                    queued += 1
+                if result.status in ("queued", "done"):
+                    completed += 1
+                    if result.status == "queued":
+                        queued += 1
                     if result.latency_s is not None:
                         latencies_s.append(result.latency_s)
                     if result.ttft_s is not None:
@@ -428,14 +448,15 @@ def main() -> None:
         f"warmup_completed={warmup_completed} "
         f"warmup_failed={warmup_failed} "
         f"warmup_timed_out={warmup_timed_out} "
+        f"completed={completed} "
         f"queued_for_write={queued} "
-        f"skipped_existing={skipped_existing} "
+        f"existing_not_written={existing_not_written} "
         f"skipped_no_speech={skipped_no_speech} "
         f"failed={failed} "
         f"timed_out={timed_out}"
     )
-    if queued:
-        files_per_second = queued / inference_wall_s if inference_wall_s else 0.0
+    if completed:
+        files_per_second = completed / inference_wall_s if inference_wall_s else 0.0
         audio_seconds_per_second = (
             audio_seconds_total / inference_wall_s if inference_wall_s else 0.0
         )
@@ -447,19 +468,21 @@ def main() -> None:
         )
         print(
             "Latency: "
+            f"avg={mean(latencies_s):.3f}s "
             f"p50={percentile(latencies_s, 50):.3f}s "
-            f"p90={percentile(latencies_s, 90):.3f}s "
+            f"p95={percentile(latencies_s, 95):.3f}s "
             f"p99={percentile(latencies_s, 99):.3f}s"
         )
         if ttfts_s:
             print(
                 "TTFT: "
+                f"avg={mean(ttfts_s):.3f}s "
                 f"p50={percentile(ttfts_s, 50):.3f}s "
-                f"p90={percentile(ttfts_s, 90):.3f}s "
+                f"p95={percentile(ttfts_s, 95):.3f}s "
                 f"p99={percentile(ttfts_s, 99):.3f}s"
             )
         else:
-            print("TTFT: p50=n/a p90=n/a p99=n/a")
+            print("TTFT: avg=n/a p50=n/a p95=n/a p99=n/a")
 
 
 if __name__ == "__main__":

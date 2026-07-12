@@ -17,10 +17,10 @@ DEFAULT_BASE_URL = "http://localhost:8090/v1"
 DEFAULT_NO_SPEECH_RMS_THRESHOLD = 1
 DEFAULT_WORKERS = 1
 DEFAULT_SEQUENTIAL_OUTPUT_ROOT = (
-    REPO_ROOT / "predictions" / "results" / "sequential_predicted"
+    REPO_ROOT / "predictions" / "results_bf16" / "sequential_predicted"
 )
 DEFAULT_BATCHED_OUTPUT_ROOT = (
-    REPO_ROOT / "predictions" / "results" / "batched_predicted"
+    REPO_ROOT / "predictions" / "results_bf16" / "batched_predicted"
 )
 
 CSV_COLUMNS = [

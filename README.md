@@ -30,6 +30,10 @@ Start the local vLLM server with:
 bash inference/run_vllm.sh
 ```
 
+The inference and benchmark scripts reset vLLM prefix cache before each run with
+`POST /reset_prefix_cache`. `inference/run_vllm.sh` enables the vLLM development
+API endpoints needed for that reset.
+
 If the server runs elsewhere, pass `--base-url`.
 
 ## Data Layout
@@ -39,8 +43,10 @@ Default input and output locations:
 ```text
 data/manifest.json                    # source manifest mapping for data prep
 data/prepared_data/                   # default ground-truth audio/text tree
-data/predicted/                       # default full-audio prediction tree
-data/predicted_uniform_audio_length_* # default clipped-audio prediction trees
+predictions/results/sequential_predicted/            # default sequential prediction tree
+predictions/results/batched_predicted/               # default batched prediction tree
+predictions/results/sequential_predicted_uniform_audio_length_* # default sequential clipped trees
+predictions/results/batched_predicted_uniform_audio_length_*    # default batched clipped trees
 ```
 
 Prepared data and predictions use the same relative path layout, for example:
@@ -48,7 +54,7 @@ Prepared data and predictions use the same relative path layout, for example:
 ```text
 data/prepared_data/<dataset>/<sample>/channel_0.wav
 data/prepared_data/<dataset>/<sample>/channel_0.txt
-data/predicted/<dataset>/<sample>/channel_0.txt
+predictions/results/batched_predicted/<dataset>/<sample>/channel_0.txt
 ```
 
 ## Prepare Data
@@ -140,10 +146,15 @@ Default behavior:
 
 - With `audio_path`, runs one file and prints transcript text by default.
 - Without `audio_path`, scans `.wav` files under `--input-root`.
-- Runs requests sequentially and does not write predictions to disk.
+- Runs requests sequentially and writes predictions under `predictions/results/sequential_predicted`.
+- Resets vLLM prefix cache before warmup and measured inference.
+- Uses 20 warmup audio files before measured files in directory mode.
+- `--num-files` means measured benchmark files after warmup and after filtering.
+- If an output file exists, inference still runs; without `--overwrite`, the
+  existing file is not rewritten. With `--overwrite`, the output is written.
 - `--print-text` prints transcripts; `--no-print-text` suppresses them.
 - Final output reports completed/failed counts, throughput, audio throughput,
-  average latency, and average TTFT (`n/a` for non-streaming).
+  avg/p50/p95/p99 latency, and avg/p50/p95/p99 TTFT (`n/a` for non-streaming).
 
 ## Batch Inference / Load Test
 
@@ -156,19 +167,23 @@ uv run python inference/run_infer_batched.py
 Default behavior:
 
 - Reads `.wav` files under `data/prepared_data`.
-- Writes predictions under `data/predicted`.
+- Writes predictions under `predictions/results/batched_predicted`.
 - Uses model `Qwen/Qwen3-ASR-1.7B`.
 - Uses base URL `http://localhost:8090/v1`.
 - Uses `--workers 1`.
 - Uses `--timeout-seconds 10`.
 - Uses `--max-tokens 512`.
-- Skips output files that already exist unless `--overwrite` is passed.
+- Resets vLLM prefix cache before warmup and measured inference.
+- Uses 20 warmup audio files before measured files.
+- `--num-files` means measured benchmark files after warmup and after filtering.
+- If an output file exists, inference still runs; without `--overwrite`, the
+  existing file is not rewritten. With `--overwrite`, the output is written.
 - Continues past per-request failures and reports `failed` and `timed_out`.
 
 Common commands:
 
 ```bash
-# Full run, resume-safe: skip predictions already present.
+# Full run.
 uv run python inference/run_infer_batched.py
 
 # Full run, overwrite existing predictions.
@@ -183,7 +198,7 @@ uv run python inference/run_infer_batched.py --workers 4 --overwrite --timeout-s
 # Limit generated transcription tokens.
 uv run python inference/run_infer_batched.py --workers 4 --overwrite --max-tokens 512
 
-# Smoke test on the first N eligible files.
+# Smoke test on the first N measured files after warmup/filtering.
 uv run python inference/run_infer_batched.py --num-files 20 --overwrite
 
 # Use a custom server or model.
@@ -194,7 +209,7 @@ uv run python inference/run_infer_batched.py \
 # Read from and write to custom directories.
 uv run python inference/run_infer_batched.py \
   --input-root data/prepared_data \
-  --output-root data/predicted_custom \
+  --output-root predictions/results/batched_predicted_custom \
   --workers 4 \
   --overwrite
 ```
@@ -215,7 +230,7 @@ uv run python inference/run_infer_batched.py \
 Default clipped output path is a separate sibling directory:
 
 ```text
-data/predicted_uniform_audio_length_10s
+predictions/results/batched_predicted_uniform_audio_length_10s
 ```
 
 The clipped mode also applies a no-speech guard before creating inference jobs.
@@ -240,7 +255,7 @@ uv run python inference/run_infer_batched.py \
 # Override clipped output directory.
 uv run python inference/run_infer_batched.py \
   --uniform-audio-length 10 \
-  --output-root data/predicted_10s_custom \
+  --output-root predictions/results/batched_predicted_10s_custom \
   --workers 4 \
   --overwrite
 ```
@@ -250,7 +265,7 @@ All load-test options:
 ```bash
 uv run python inference/run_infer_batched.py \
   --input-root data/prepared_data \
-  --output-root data/predicted \
+  --output-root predictions/results/batched_predicted \
   --model Qwen/Qwen3-ASR-1.7B \
   --base-url http://localhost:8090/v1 \
   --workers 4 \
@@ -260,6 +275,108 @@ uv run python inference/run_infer_batched.py \
   --max-tokens 512 \
   --no-speech-rms-threshold 1 \
   --overwrite
+```
+
+## Benchmark Wrapper
+
+Script:
+
+```bash
+uv run python inference/run_benchmark.py --mode sequential
+uv run python inference/run_benchmark.py --mode batched
+```
+
+The wrapper runs `run_infer.py` or `run_infer_batched.py`, streams the child
+script output live, parses the final metrics, and appends one row to:
+
+```text
+inference/results/sequential.csv
+inference/results/batched.csv
+```
+
+Default behavior:
+
+- `--mode sequential` uses `predictions/results/sequential_predicted`.
+- `--mode batched` uses `predictions/results/batched_predicted`.
+- Streaming is enabled by default; use `--no-stream` for non-streaming requests.
+- `--workers` is only valid with `--mode batched`; default is `1`.
+- `--num-files` is measured files after the 20-file warmup and after filtering.
+- `--uniform-audio-length` filters eligible audio first, then clips submitted
+  audio to that length.
+- `--overwrite` writes outputs even when prediction files already exist. Without
+  it, inference still runs but existing outputs are not rewritten.
+- `--no-speech-rms-threshold` defaults to `1`.
+- `--input-root`, `--output-root`, `--model`, and `--base-url` default to the
+  same values as the underlying scripts.
+
+CSV metrics include counts, skipped/no-speech counts, wall time, file
+throughput, audio throughput, avg/p50/p95/p99 latency, avg/p50/p95/p99 TTFT,
+and the exact command that was run. For full overwrite benchmarks, the wrapper
+also runs aggregate error-rate scoring and appends CER/WER fields to the CSV.
+That scoring step runs only when all of these are true:
+
+- `--overwrite` is passed.
+- `--num-files` is not passed.
+- `--uniform-audio-length` is not passed.
+
+The scoring step uses `eval/compute_error_rates.py <output_root> --ref-root
+<input_root>` and does not pass `--per-file`.
+
+Common benchmark commands:
+
+```bash
+# Sequential streaming benchmark on 50 measured files.
+uv run python inference/run_benchmark.py \
+  --mode sequential \
+  --num-files 50
+
+# Sequential streaming benchmark with 10-second clipped audio.
+uv run python inference/run_benchmark.py \
+  --mode sequential \
+  --num-files 50 \
+  --uniform-audio-length 10
+
+# Batched streaming benchmark with 4 concurrent workers.
+uv run python inference/run_benchmark.py \
+  --mode batched \
+  --workers 4 \
+  --num-files 50
+
+# Batched 10-second clipped benchmark.
+uv run python inference/run_benchmark.py \
+  --mode batched \
+  --workers 4 \
+  --num-files 50 \
+  --uniform-audio-length 10
+
+# Non-streaming benchmark.
+uv run python inference/run_benchmark.py \
+  --mode batched \
+  --workers 4 \
+  --num-files 50 \
+  --no-stream
+
+# Write or overwrite prediction files during benchmarking.
+uv run python inference/run_benchmark.py \
+  --mode batched \
+  --workers 4 \
+  --num-files 50 \
+  --overwrite
+
+# Full batched benchmark with aggregate CER/WER scoring.
+uv run python inference/run_benchmark.py \
+  --mode batched \
+  --workers 4 \
+  --overwrite
+
+# Custom roots, model, and server.
+uv run python inference/run_benchmark.py \
+  --mode sequential \
+  --input-root data/prepared_data \
+  --output-root predictions/results/sequential_predicted_custom \
+  --model Qwen/Qwen3-ASR-1.7B \
+  --base-url http://localhost:8090/v1 \
+  --num-files 50
 ```
 
 ## Error-Rate Evaluation
@@ -289,21 +406,21 @@ Commands:
 
 ```bash
 # Score full-audio predictions.
-uv run python eval/compute_error_rates.py data/predicted
+uv run python eval/compute_error_rates.py predictions/results/batched_predicted
 
 # Score clipped-audio predictions.
-uv run python eval/compute_error_rates.py data/predicted_uniform_audio_length_10s
+uv run python eval/compute_error_rates.py predictions/results/batched_predicted_uniform_audio_length_10s
 
 # Use a custom reference tree.
-uv run python eval/compute_error_rates.py data/predicted_custom \
+uv run python eval/compute_error_rates.py predictions/results/batched_predicted_custom \
   --ref-root data/prepared_data
 
 # Print per-file tab-separated metrics before the aggregate summary.
-uv run python eval/compute_error_rates.py data/predicted \
+uv run python eval/compute_error_rates.py predictions/results/batched_predicted \
   --per-file
 
 # Save per-file and aggregate output.
-uv run python eval/compute_error_rates.py data/predicted \
+uv run python eval/compute_error_rates.py predictions/results/batched_predicted \
   --per-file > error_rates.tsv
 ```
 
@@ -322,14 +439,14 @@ Prepare data, run inference, score predictions:
 ```bash
 uv run python data/read_data.py
 uv run python inference/run_infer_batched.py --workers 4 --overwrite --timeout-seconds 30
-uv run python eval/compute_error_rates.py data/predicted
+uv run python eval/compute_error_rates.py predictions/results/batched_predicted
 ```
 
 Run a short smoke test:
 
 ```bash
 uv run python inference/run_infer_batched.py --num-files 20 --workers 4 --overwrite
-uv run python eval/compute_error_rates.py data/predicted
+uv run python eval/compute_error_rates.py predictions/results/batched_predicted
 ```
 
 Run clipped 10-second inference and score it:
@@ -341,5 +458,5 @@ uv run python inference/run_infer_batched.py \
   --overwrite \
   --timeout-seconds 30
 
-uv run python eval/compute_error_rates.py data/predicted_uniform_audio_length_10s
+uv run python eval/compute_error_rates.py predictions/results/batched_predicted_uniform_audio_length_10s
 ```

@@ -71,7 +71,13 @@ def _qk_norm_mrope_kernel(
     input_ptrs = tl.where(is_q, q_input, k_input)
     values = tl.load(input_ptrs, mask=valid_head, other=0.0).to(tl.float32)
 
-    squared_mean = tl.sum(values * values, axis=1) / head_dim
+    # Match the decode graph's Inductor reduction (R0_BLOCK=64): accumulate
+    # dimensions d and d + 64 first, then reduce the resulting 64 lanes.
+    squared_values = tl.reshape(
+        values * values,
+        (block_heads, 2, half_rotary_dim),
+    )
+    squared_mean = tl.sum(tl.sum(squared_values, axis=1), axis=1) / head_dim
     inv_rms = tl.rsqrt(squared_mean + eps)
     q_weights = q_weight_ptr + dims
     k_weights = k_weight_ptr + dims

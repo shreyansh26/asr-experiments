@@ -2,10 +2,11 @@
 
 ## Status
 
-Promising latency-priority candidate. It beats the static-FP8 control on
-batched latency and throughput, but its median TTFT is 13 ms worse. Full-corpus
-quality validation is deferred until the TTFT interaction experiment is
-resolved.
+Superseded intermediate candidate. It beats the static-FP8 control on batched
+latency and throughput, but its direct 128-lane RMS reduction moves quality
+more than necessary and its full-corpus TTFT regresses. The child
+`opt2/qk-kvcache-exact-rms` branch retains the fusion while matching Inductor's
+64-lane reduction order.
 
 Branch: `opt2/qk-mrope-kvcache-fusion`
 
@@ -77,6 +78,19 @@ The means tell the same latency/throughput story: 21.692 to 22.798 files/s and
 The host remains noisy, but both three-run candidate blocks beat their adjacent
 three-run control block on median latency and throughput.
 
+## Full 550-file batched result
+
+| Variant | Files/s | Avg latency (s) | Avg TTFT (s) | CER | WER |
+|---|---:|---:|---:|---:|---:|
+| Paired static-FP8 control | 4.413 | 3.553 | 0.418 | 0.160771 | 0.381654 |
+| Combined fusion | 4.548 | 3.451 | 0.475 | 0.163762 | 0.384453 |
+| Delta | +3.1% | -2.9% | +57 ms | +0.002991 | +0.002799 |
+
+This confirms the latency/throughput gain, but also shows why this arithmetic
+version should not be selected: CER and WER each move by about 0.3 percentage
+points and TTFT is worse. The exact-order child reduces those quality deltas by
+more than an order of magnitude.
+
 ## Nsight Systems result
 
 The dominant count-1 decode graph was compared over 20 replays.
@@ -105,9 +119,8 @@ Reports:
 
 ## Decision and next experiment
 
-Keep the branch: it is the first round-two kernel candidate with a repeatable
-batched latency and throughput win. Do not promote it as the final setting yet
-because TTFT regresses.
+Keep the branch as the launch-fusion proof, but do not promote it as the final
+setting because TTFT and quality regress.
 
 A 50-second input produces a 660-token prompt, outside vLLM's default full
 CUDA-graph capture limit of 512. Extended prefill capture was rejected on the

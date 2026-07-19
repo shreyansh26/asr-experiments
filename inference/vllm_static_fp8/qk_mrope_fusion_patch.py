@@ -259,8 +259,14 @@ def fused_qk_norm_mrope_kv_update_impl(
                 slot_mapping,
             )
     else:
-        heads_per_program = 16
-        groups_per_token = 2
+        if q.shape[0] >= 512:
+            heads_per_program = 8
+            groups_per_token = 3
+            num_warps = 2
+        else:
+            heads_per_program = 16
+            groups_per_token = 2
+            num_warps = 4
         _qk_norm_mrope_kernel[(q.shape[0] * groups_per_token,)](
             q,
             k,
@@ -294,9 +300,9 @@ def fused_qk_norm_mrope_kv_update_impl(
             60,
             heads_per_program,
             groups_per_token,
-            16,
+            heads_per_program,
             True,
-            num_warps=4,
+            num_warps=num_warps,
         )
 
     dummy = torch.empty(0, device=kv_cache.device, dtype=kv_cache.dtype)

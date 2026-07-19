@@ -2,13 +2,29 @@
 
 Utilities for preparing ASR audio/text pairs, running Qwen ASR through a vLLM
 OpenAI-compatible server, and scoring prediction files against prepared ground
-truth.
+truth. The serving and benchmark workflow supports BF16, dynamic FP8, and
+calibrated static-activation FP8.
 
 Run commands below from the repository root:
 
 ```bash
 cd /mnt/ssd1/shreyansh/home_dir/asr_experiments
 ```
+
+## Technical Documentation
+
+- [Static FP8 activation calibration](docs/fp8-calibration.md) explains sample
+  selection, batched collection, global per-layer absmax aggregation, scale
+  calculation, and the portable JSON artifact.
+- [Out-of-tree vLLM static-FP8 extension](docs/vllm-static-fp8-extension.md)
+  explains Python/vLLM registration, layer-name mapping, scale injection,
+  runtime behavior, coverage diagnostics, and upgrade boundaries.
+- [Nsight Systems dynamic-versus-static FP8 guide](docs/nsys-fp8-dynamic-vs-static.md)
+  covers capture commands, report interpretation, CUDA-graph timing, exact
+  node-level differences, screenshots, and row-by-row decoder pseudocode.
+- [FlashAttention forward combine in Nsight Systems](docs/flashattention-forward-combine.md)
+  explains the split-KV decode path, stable softmax recombination, and how to
+  interpret `FlashAttnFwdCombine` in the node trace.
 
 ## Setup
 
@@ -24,15 +40,41 @@ The inference scripts expect a vLLM OpenAI-compatible server by default at:
 http://localhost:8090/v1
 ```
 
-Start the local vLLM server with:
+Choose one server precision:
 
 ```bash
+# BF16.
 bash inference/run_vllm.sh
+
+# vLLM dynamic FP8 activations.
+bash inference/run_vllm_fp8_dynamic.sh
+
+# Calibrated static FP8 activations. The default artifact must exist.
+bash inference/run_vllm_fp8_static.sh
 ```
 
 The inference and benchmark scripts reset vLLM prefix cache before each run with
-`POST /reset_prefix_cache`. `inference/run_vllm.sh` enables the vLLM development
-API endpoints needed for that reset.
+`POST /reset_prefix_cache`. All three launchers enable the vLLM development API
+endpoints needed for that reset.
+
+The static-FP8 launcher defaults to
+`inference/results/fp8_static_scales_128x50.json`. Generate it with:
+
+```bash
+bash inference/run_record_fp8_static_scales.sh \
+  --input-root data/prepared_data \
+  --num-files 128 \
+  --batch-size 8 \
+  --max-audio-seconds 50 \
+  --output inference/results/fp8_static_scales_128x50.json
+```
+
+Override the artifact when launching:
+
+```bash
+SCALES_JSON=inference/results/fp8_static_scales_custom.json \
+  bash inference/run_vllm_fp8_static.sh
+```
 
 If the server runs elsewhere, pass `--base-url`.
 
@@ -47,6 +89,9 @@ predictions/results/sequential_predicted/            # default sequential predic
 predictions/results/batched_predicted/               # default batched prediction tree
 predictions/results/sequential_predicted_uniform_audio_length_* # default sequential clipped trees
 predictions/results/batched_predicted_uniform_audio_length_*    # default batched clipped trees
+predictions/results_bf16/                 # BF16 comparison benchmark outputs
+predictions/results_fp8_dynamic/          # dynamic-FP8 comparison benchmark outputs
+predictions/results_fp8_static/           # static-FP8 comparison/default wrapper outputs
 ```
 
 Prepared data and predictions use the same relative path layout, for example:
@@ -296,8 +341,12 @@ inference/results/batched.csv
 
 Default behavior:
 
-- `--mode sequential` uses `predictions/results/sequential_predicted`.
-- `--mode batched` uses `predictions/results/batched_predicted`.
+- `--mode sequential` uses
+  `predictions/results_fp8_static/sequential_predicted`.
+- `--mode batched` uses `predictions/results_fp8_static/batched_predicted`.
+- For BF16 or dynamic-FP8 comparison runs, pass an explicit `--output-root`
+  containing `results_bf16` or `results_fp8_dynamic`. The analysis script uses
+  those path markers to identify precision.
 - Streaming is enabled by default; use `--no-stream` for non-streaming requests.
 - `--workers` is only valid with `--mode batched`; default is `1`.
 - `--num-files` is measured files after the 20-file warmup and after filtering.
@@ -306,8 +355,9 @@ Default behavior:
 - `--overwrite` writes outputs even when prediction files already exist. Without
   it, inference still runs but existing outputs are not rewritten.
 - `--no-speech-rms-threshold` defaults to `1`.
-- `--input-root`, `--output-root`, `--model`, and `--base-url` default to the
-  same values as the underlying scripts.
+- `--input-root`, `--model`, and `--base-url` default to the same values as the
+  underlying scripts. The wrapper's default output roots are the static-FP8
+  paths listed above.
 
 CSV metrics include counts, skipped/no-speech counts, wall time, file
 throughput, audio throughput, avg/p50/p95/p99 latency, avg/p50/p95/p99 TTFT,
@@ -378,6 +428,109 @@ uv run python inference/run_benchmark.py \
   --base-url http://localhost:8090/v1 \
   --num-files 50
 ```
+
+### Precision comparison workflow
+
+Start exactly one matching server, run its benchmarks, stop it, and repeat for
+the next precision:
+
+| Precision label | Server command |
+| --- | --- |
+| `bf16` | `bash inference/run_vllm.sh` |
+| `fp8_dynamic` | `bash inference/run_vllm_fp8_dynamic.sh` |
+| `fp8_static` | `bash inference/run_vllm_fp8_static.sh` |
+
+Use precision-specific output roots. This keeps prediction files isolated and
+allows `analyse_results.py` to infer the precision from the recorded path:
+
+```bash
+# Set this to bf16, fp8_dynamic, or fp8_static for the matching running server.
+PRECISION=fp8_static
+
+# Full sequential benchmark; --overwrite also enables aggregate CER/WER scoring.
+uv run python inference/run_benchmark.py \
+  --mode sequential \
+  --output-root "predictions/results_${PRECISION}/sequential_predicted" \
+  --overwrite
+
+# Sequential benchmark limited to the first 50 seconds of eligible files.
+uv run python inference/run_benchmark.py \
+  --mode sequential \
+  --uniform-audio-length 50 \
+  --output-root "predictions/results_${PRECISION}/sequential_predicted_uniform_audio_length_50s"
+
+# Full 16-worker load test.
+uv run python inference/run_benchmark.py \
+  --mode batched \
+  --workers 16 \
+  --output-root "predictions/results_${PRECISION}/batched_predicted" \
+  --overwrite
+
+# 16-worker, 50-second load test.
+uv run python inference/run_benchmark.py \
+  --mode batched \
+  --workers 16 \
+  --uniform-audio-length 50 \
+  --output-root "predictions/results_${PRECISION}/batched_predicted_uniform_audio_length_50s"
+```
+
+Print the comparison tables from the accumulated CSV files:
+
+```bash
+uv run python inference/analyse_results.py --mode sequential
+uv run python inference/analyse_results.py --mode batched
+```
+
+### Current benchmark results
+
+These tables are the current workspace snapshot from
+`inference/results/sequential.csv` and `inference/results/batched.csv`. Latency
+and TTFT values are seconds; throughput is completed files per second.
+
+Sequential, full benchmark with 550 measured files:
+
+| Precision | Lat p50 | Lat p95 | Lat p99 | TTFT p50 | TTFT p95 | TTFT p99 | Throughput | CER | WER |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| BF16 | 1.576 | 3.261 | 4.229 | 0.203 | 0.318 | 0.377 | 0.583 | 0.168 | 0.388 |
+| FP8 dynamic | 1.473 | 2.929 | 3.732 | 0.201 | 0.309 | 0.339 | 0.640 | 0.165 | 0.385 |
+| FP8 static | 1.381 | 2.745 | 3.439 | 0.207 | 0.339 | 0.372 | 0.682 | 0.162 | 0.384 |
+
+Sequential, 50-second audio limit:
+
+| Precision | Lat p50 | Lat p95 | Lat p99 | TTFT p50 | TTFT p95 | TTFT p99 | Throughput |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| BF16 | 0.365 | 0.564 | 1.411 | 0.063 | 0.074 | 0.092 | 2.677 |
+| FP8 dynamic | 0.286 | 0.479 | 0.634 | 0.046 | 0.060 | 0.064 | 3.409 |
+| FP8 static | 0.273 | 0.468 | 0.489 | 0.059 | 0.075 | 0.090 | 3.538 |
+
+Batched, full benchmark with 550 measured files:
+
+| Precision | Workers | Lat p50 | Lat p95 | Lat p99 | TTFT p50 | TTFT p95 | TTFT p99 | Throughput | CER | WER |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| BF16 | 4 | 1.977 | 4.006 | 5.276 | 0.227 | 0.402 | 0.509 | 1.875 | n/a | n/a |
+| BF16 | 8 | 2.428 | 5.082 | 6.409 | 0.260 | 0.558 | 0.935 | 3.001 | n/a | n/a |
+| BF16 | 16 | 3.520 | 7.136 | 9.130 | 0.351 | 0.946 | 1.946 | 4.138 | 0.166 | 0.387 |
+| FP8 dynamic | 4 | 1.900 | 3.831 | 4.719 | 0.228 | 0.420 | 0.566 | 1.980 | n/a | n/a |
+| FP8 dynamic | 8 | 2.435 | 4.959 | 5.848 | 0.270 | 0.525 | 0.775 | 3.055 | n/a | n/a |
+| FP8 dynamic | 16 | 3.563 | 7.166 | 9.903 | 0.343 | 1.121 | 1.838 | 4.104 | 0.158 | 0.380 |
+| FP8 static | 16 | 3.346 | 6.675 | 9.124 | 0.426 | 1.177 | 1.984 | 4.352 | 0.162 | 0.384 |
+
+Batched, 50-second audio limit:
+
+| Precision | Workers | Lat p50 | Lat p95 | Lat p99 | TTFT p50 | TTFT p95 | TTFT p99 | Throughput |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| BF16 | 4 | 0.429 | 0.641 | 1.659 | 0.049 | 0.085 | 0.122 | 9.130 |
+| BF16 | 8 | 0.542 | 0.864 | 2.047 | 0.073 | 0.179 | 0.288 | 13.922 |
+| BF16 | 16 | 0.720 | 1.338 | 2.768 | 0.138 | 0.448 | 0.456 | 18.554 |
+| FP8 dynamic | 4 | 0.351 | 0.582 | 0.727 | 0.052 | 0.106 | 0.111 | 10.489 |
+| FP8 dynamic | 8 | 0.441 | 0.764 | 0.846 | 0.053 | 0.149 | 0.157 | 16.686 |
+| FP8 dynamic | 16 | 0.735 | 1.279 | 1.481 | 0.154 | 0.432 | 0.499 | 20.731 |
+| FP8 static | 16 | 0.652 | 1.098 | 1.212 | 0.119 | 0.306 | 0.332 | 22.171 |
+
+Static FP8 currently has batched comparison rows only at 16 workers; the table
+does not imply unmeasured 4- or 8-worker static results. CER/WER is `n/a` for
+rows that were not recorded through the wrapper's full overwrite-and-score
+path. The 50-second runs are intentionally not scored by the wrapper.
 
 ## Error-Rate Evaluation
 

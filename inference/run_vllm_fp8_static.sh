@@ -17,11 +17,13 @@ fi
 export ASR_FP8_STATIC_SCALES_JSON="$(realpath "$SCALES_JSON")"
 DEFAULT_COVERAGE_JSON="/tmp/asr_fp8_static_coverage_${PORT}_{pid}.json"
 export ASR_FP8_STATIC_COVERAGE_JSON="${ASR_FP8_STATIC_COVERAGE_JSON:-$DEFAULT_COVERAGE_JSON}"
+export ASR_QK_MROPE_FUSION="${ASR_QK_MROPE_FUSION:-1}"
 export PYTHONPATH="$SCRIPT_DIR/vllm_static_fp8${PYTHONPATH:+:$PYTHONPATH}"
 
 echo "Model: $MODEL"
 echo "Static FP8 scales: $ASR_FP8_STATIC_SCALES_JSON"
 echo "Static FP8 coverage: $ASR_FP8_STATIC_COVERAGE_JSON"
+echo "Q/K RMSNorm + MRoPE fusion: $ASR_QK_MROPE_FUSION"
 echo "Serving on $HOST:$PORT"
 
 VLLM_SERVER_DEV_MODE="${VLLM_SERVER_DEV_MODE:-1}" \

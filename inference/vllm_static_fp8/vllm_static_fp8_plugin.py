@@ -11,6 +11,8 @@ from typing import Any
 
 import torch
 
+from qk_mrope_fusion_patch import install_qk_mrope_fusion_patch
+
 from vllm.logger import init_logger
 from vllm.model_executor.layers.linear import (
     LinearBase,
@@ -31,6 +33,9 @@ from vllm.model_executor.layers.quantization.utils.quant_utils import (
 
 
 logger = init_logger("vllm.static_fp8_json")
+
+if os.environ.get("ASR_QK_MROPE_FUSION", "0") == "1":
+    install_qk_mrope_fusion_patch()
 
 SCALES_ENV = "ASR_FP8_STATIC_SCALES_JSON"
 EXPECTED_FORMAT = "qwen3_asr_fp8_static_activation_scales"

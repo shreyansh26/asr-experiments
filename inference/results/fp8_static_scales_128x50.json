@@ -1,0 +1,7055 @@
+{
+  "aggregation": "per_module_max_abs_over_all_inputs_and_calls",
+  "audio_files": [
+    "data/prepared_data/empyrean_january_2025/1773107_3B4DEEFF4D124689B8E87AA4BA364178_300000004857200_enwizu40goempyrean.com_1_17__G6Xr1pL/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772243_6775099072A848748713C5BE0E019108_300000004855792_rwarfield40goempyrean.com_1__OCPgn6L/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772243_6775099072A848748713C5BE0E019108_300000004855792_rwarfield40goempyrean.com_1__OCPgn6L/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/REe56eb9f10377029e1288cd3212b9f0a6_5596573/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772368_C245AE1648384701B4855464672398BA_300000004855677_rgloria40goempyrean.com_1_17_xstCgMw/channel_1.wav",
+    "data/prepared_data/ezcater_april_2025/RE75b261743050b3bf2649ceed872b04e2/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772151_2C77A6223CD644BD8E2B8CAF7675D992_300000004855709_sfoster40goempyrean.com_1_17_3bHkvVi/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/REe56eb9f10377029e1288cd3212b9f0a6_5596573/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-156770_3.6424989607800944_5.750710614542779/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-154180_4.659195412934752_3.3580604054639775/channel_0.wav",
+    "data/prepared_data/ezcater_april_2025/RE2b1a2d98bdd7c3e0c9c8134c2cbfdd93/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/RE1c9cdcfbf313eeb3919080f5f00f1db9_5596594/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772222_CB50A967D52C4CD1976C0F812C302944_300000004855819_dbradley40goempyrean.com_1_1_F8lxnK8/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772269_D22D07EE9FB84A8496F716BA573FB6F6_300000004855837_sharichardson40goempyrean.co_9Ih4Xom/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/RE35087bfcd8e2458fc3cb86fccb63bba7_5596655/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772179_06D77C6B8C3C487EAA55E32732376B77_300000004855787_slloyd40goempyrean.com_1_17__JGfiGqY/channel_0.wav",
+    "data/prepared_data/sharecare_january_2025/526958_300000039779331_394D6F4F63534EBAA58579E9ED9E5357_lorri.thomas40sharecare.com__OodVz3d/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772297_C67A3EAB8F1E45CA9FAC32B4BC7879FC_300000004855748_mmann40goempyrean.com_1_17_2_4Giblug/channel_1.wav",
+    "data/prepared_data/ezcater_april_2025/REfe106d0a598b42b4082c197c687a700c/channel_0.wav",
+    "data/prepared_data/empyrean_january_2025/1773134_ED96707A0A5C4406AE0B9A69C54B372D_300000004857169_tbazzell40goempyrean.com_1_1_Im9Qdth/channel_1.wav",
+    "data/prepared_data/sharecare_january_2025/526540_300000039778507_3BB070BEC1E04EA3B25E770D1DAA82BA_stephanie.gage40sharecare.co_D6dTFMP/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/RE73933e26491ba6f4117ec35fc3eadcfc_5596665/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772198_541879D89A16473D9187BF85CBC51396_300000004855765_bjones40goempyrean.com_1_17__AQ0n25D/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772154_B898C0A58FE942A181AE1A43FDE466A8_300000004855702_pbates240goempyrean.com_1_17_NLFVr7A/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/REf5e8502084536030376072e9ba084e65_5596521/channel_0.wav",
+    "data/prepared_data/empyrean_january_2025/1773110_81443378EC164603A35EF009DCEB5FE8_300000004857182_jestes40goempyrean.com_1_17__YZLj5Xx/channel_0.wav",
+    "data/prepared_data/empyrean_january_2025/1773143_B0DAEB9A4106419790D1FC6C73F30098_300000004857223_areed40goempyrean.com_1_17_2_0nx0V3u/channel_0.wav",
+    "data/prepared_data/empyrean_january_2025/1773123_2BFB0565E52446569E993148EC657678_300000004857222_enwizu40goempyrean.com_1_17__LjDY4lY/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/RE3a1ecf47c06704e07bc5d0f970160ec3_5596642/channel_1.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/19515750_1B11E2849F764C0CA63699F9D50B7661_KS.a6528640fromyouflowers.com_5_31__wIdDZFv/channel_1.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/300000007094494_ED95B1E119BB4E4EA9594382F488918B_CM.a6438340fromyouflowers.co_JPz4K6q/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/REad73d2c0bb5534f55fbeb81ee38e3647_5596526/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-155426_2.7270864113557756_5.847057955124225/channel_0.wav",
+    "data/prepared_data/sharecare_january_2025/527374_300000039779812_BA52497D9F854C8D82C5DC2D697DE962_holly.porter40sharecare.com__RvC9ts3/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772327_7A747B63677E42AFA9537DCCD097AD25_300000004855846_rgloria40goempyrean.com_1_17_SkcPGwY/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/300000007089790_12EEA952EB8C472C8A513843FFF97724_AM.a6_ftdaf602640fromyouflow_w5QUuJJ/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/RE87eb82c258f5af65e6143345619ab03d_5596770/channel_1.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/19519073_DB71E480295F44BEA44A4C1C6E3AEC37_SI.a6527740fromyouflowers.com_6_2_2_Shz5E7g/channel_1.wav",
+    "data/prepared_data/ezcater_april_2025/REbffb837ecb153f703fa16b50d278b6d5/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-156736_0.08109155307420499_3.000961386931548/channel_0.wav",
+    "data/prepared_data/empyrean_january_2025/1773074_7805705DB52B48A9AA850F39D06B7F1E_300000004857149_woblior40goempyrean.com_1_17_qXzl8y8/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/RE714fced7724ba7f921fb3abb3c448610_5596622/channel_1.wav",
+    "data/prepared_data/ezcater_april_2025/RE128893c938ab2a50954fc42dc1dee401/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772258_762AEC09762C432DBCE9D1997ED254B5_300000004855864_sbronston40goempyrean.com_1__DDDSSQb/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772200_399E4E5A4B5B4156A49ED049357A2A8D_300000004855696_nswinbank40goempyrean.com_1__yMiCINf/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-155409_4.138271349580736_4.7977958060247845/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-160536_4.152508485475683_5.053259501344981/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772217_4A208DAEF7D94B45B73208BBA5FC88BD_300000004855676_areece40goempyrean.com_1_17__q5eEwvs/channel_1.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/19515750_1B11E2849F764C0CA63699F9D50B7661_KS.a6528640fromyouflowers.com_5_31__wIdDZFv/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/300000007089773_4C18963F746E42F8B5D92443E1D903B2_HK.a6325940fromyouflowers.co_IEtT2uD/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772160_7545A44D16E04B4C856DD7EAB8E1B7D9_300000004855704_slloyd40goempyrean.com_1_17__W5kYmtt/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/19519078_7BC029AAC2D545A0B2D75CF4D3010312_SA.b280031140fromyouflowers.com_6_2_A6WBbFa/channel_1.wav",
+    "data/prepared_data/sharecare_january_2025/526534_300000039778655_F4B71A3616F9432E9D7BA9DAC5D7386F_holly.porter40sharecare.com__SRPvn7p/channel_1.wav",
+    "data/prepared_data/empyrean_january_2025/1773137_C377D2F011EF4DFA95DC2ECF4329C36A_300000004857211_lgranados40goempyrean.com_1__7Ki8Y0a/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772183_B438C56D7FF443BD993FA9EE5C3C8D22_300000004855671_ppage40goempyrean.com_1_17_2_bQcu1Ty/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772179_06D77C6B8C3C487EAA55E32732376B77_300000004855787_slloyd40goempyrean.com_1_17__JGfiGqY/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-160491_4.703636492196901_5.490985077565372/channel_0.wav",
+    "data/prepared_data/ezcater_april_2025/RE88fe0cb4b88e81f7be636ef30d07a142/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772270_2C30F0519CEF4A51AD0425B3BC170AE7_300000004855803_arotimi40goempyrean.com_1_17_kbbDOWs/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772057_B542292A8C21466EA813B90A3FACBFD6_300000004855633_tsanchez40goempyrean.com_1_1_mo4QrnV/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/19515794_98CD3B317C0241A7A7B2F83279A444BA_SA.b280031140fromyouflowers.com_5_3_jaq8B0u/channel_1.wav",
+    "data/prepared_data/sharecare_january_2025/526684_300000039778792_AB3A099A650445A3BBF47FCF452252CC_lorri.thomas40sharecare.com__tdROMku/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-161723_0.7006435237603932_5.04882326339637/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/REea51d45ba006e4bb9eab150e3e527f54_5596625/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772209_880D4B42082B47DE853743CE25E910C6_300000004855723_tsanchez40goempyrean.com_1_1_ykcHlSC/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/REea51d45ba006e4bb9eab150e3e527f54_5596625/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/300000007089773_4C18963F746E42F8B5D92443E1D903B2_HK.a6325940fromyouflowers.co_IEtT2uD/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/19519092_12AC84314CD44955801588DADE7BEFD9_ET.b3640fromyouflowers.com_6_2_2025_KYmUnQ1/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/RE9f4f84fa5f5967c785d4ece55243b9a9_5596738/channel_1.wav",
+    "data/prepared_data/sharecare_january_2025/526870_300000039779145_2AB3816706674FE8BB81DB5DA56F54C9_kimberly.hagler40sharecare.c_GmaFPZU/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/REbf8b414c35d7138f0c2d6d697254e0d2_5596646/channel_1.wav",
+    "data/prepared_data/empyrean_january_2025/1773137_C377D2F011EF4DFA95DC2ECF4329C36A_300000004857211_lgranados40goempyrean.com_1__7Ki8Y0a/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/19519092_12AC84314CD44955801588DADE7BEFD9_ET.b3640fromyouflowers.com_6_2_2025_KYmUnQ1/channel_0.wav",
+    "data/prepared_data/sharecare_january_2025/527314_300000039779891_B02629EFDA5F45408646B41B9977C980_emily.jimenez40sharecare.com_rT8pA8f/channel_0.wav",
+    "data/prepared_data/ezcater_april_2025/REe182d55d34eb046277d2e71c4c525632/channel_0.wav",
+    "data/prepared_data/sharecare_january_2025/526537_300000039778621_56AFBC21BC5B408295715A2AB4BB9EAD_angela.amalokwu40sharecare.c_JCQsFlk/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-156722_7.250833367638501_5.414962510633679/channel_0.wav",
+    "data/prepared_data/ezcater_april_2025/RE90cddb6da42960112a20d932b7da7de9/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-155424_3.616995654123002_3.140403897847174/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772194_F0FF85EAA06845938CD0887D5859ADCC_300000004855729_sharichardson40goempyrean.co_PgZnPsL/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/REc1a3c12a3ddc8ebea8ec873b6af00f6b_5596520/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772185_1FDF24004B0C428D9A33B93E2633F25B_300000004855722_twalker40goempyrean.com_1_17_G2uTFIA/channel_1.wav",
+    "data/prepared_data/empyrean_january_2025/1773123_2BFB0565E52446569E993148EC657678_300000004857222_enwizu40goempyrean.com_1_17__LjDY4lY/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/RE419183fd6e53eb19326cbd050f7a14d5_5596538/channel_0.wav",
+    "data/prepared_data/empyrean_january_2025/1773079_199EB493B2844F0BAB5713F51EDC7451_300000004857134_jestes40goempyrean.com_1_17__n2J2lQk/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772206_B5E40A88EB014749A955610BB05C8A11_300000004855742_dtaylor40goempyrean.com_1_17_82CNXzb/channel_1.wav",
+    "data/prepared_data/ezcater_april_2025/RE128893c938ab2a50954fc42dc1dee401/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772200_399E4E5A4B5B4156A49ED049357A2A8D_300000004855696_nswinbank40goempyrean.com_1__yMiCINf/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/RE37e29ad6625c43c0769cc8cf698ff94b_5596788/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-158598_3.9264568615474573_5.000042958047184/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772589_5C74636750864CB0B1933E94A2EB9BAD_300000004855850_areece40goempyrean.com_1_17__OmI8zXe/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/RE9da5e2e4c07e47c2d97ecf1beb8780d1_5596547/channel_0.wav",
+    "data/prepared_data/ezcater_april_2025/RE36ecb05bfb1350e8c996c85d1e9c491d/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-161124_1.807462455016627_5.494555643566387/channel_0.wav",
+    "data/prepared_data/sharecare_january_2025/526511_300000039778632_1D3FB3222A774350A70E277677BBA54F_holly.porter40sharecare.com__NrOp6K0/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-158688_0.6594021683207828_3.427507876252582/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772297_C67A3EAB8F1E45CA9FAC32B4BC7879FC_300000004855748_mmann40goempyrean.com_1_17_2_4Giblug/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/REe086a18e5a0cd40a7732e2ea8b43eef2_5596652/channel_0.wav",
+    "data/prepared_data/sharecare_january_2025/527230_300000039779679_3D39A4AC8CD840499084E46A3ACB4F66_angela.amalokwu40sharecare.c_32j54LG/channel_0.wav",
+    "data/prepared_data/sharecare_january_2025/526534_300000039778655_F4B71A3616F9432E9D7BA9DAC5D7386F_holly.porter40sharecare.com__SRPvn7p/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/REd68a1d3e2726fccfe5e07746815cc74d_5596737/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-156783_2.6614063107465236_4.502395288939329/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-158669_4.321806275812896_5.796236596857198/channel_0.wav",
+    "data/prepared_data/empyrean_january_2025/1773106_7BE66D6B0CA8412284AC1E89A1A144A2_300000004857196_gpadilla40goempyrean.com_1_1_UROEhEu/channel_1.wav",
+    "data/prepared_data/sharecare_january_2025/527370_300000039779975_828BBFF96EB644129DF82533705423EC_lorri.thomas40sharecare.com__KtA31NH/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772187_E19374AACC274BA49D5D11B3CB4A444E_300000004855724_crwilliams40goempyrean.com_1_mqavf85/channel_1.wav",
+    "data/prepared_data/empyrean_january_2025/1773069_445BCAAEC1F04CB0A90BB69EAD0EC3CF_300000004857124_pbates240goempyrean.com_1_17_ppksKWi/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772182_416FD43FBDCD44D0AC73757D09675881_300000004855768_cjohnson-gomez40goempyrean.c_DSRJ6RJ/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/RE606eeea96ab38460b4423283ab94310f_5596817/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-151478_3.8956918456652803_5.568934805091453/channel_0.wav",
+    "data/prepared_data/ezcater_december_2024/RE582a18b07063e2261ec29cc2104f1c8b_5596537/channel_1.wav",
+    "data/prepared_data/carta_september_2024/call-155419_6.146090300121628_5.782504784968939/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/19515769_411C6221109444FFB8545BB8001A22CD_VT.a6527640fromyouflowers.com_5_31__BMtbTjC/channel_0.wav",
+    "data/prepared_data/ezcater_april_2025/RE725500ea99f8caf40e151da7b4565f50/channel_1.wav",
+    "data/prepared_data/ezcater_december_2024/RE890b1c79b84d3218d014dd9472e075da_5596650/channel_1.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/300000007099473_89DCBC29C40A4389AB89C08A64A984BB_KC.evkca240fromyouflowers.co_SxJEpt8/channel_0.wav",
+    "data/prepared_data/sharecare_january_2025/527127_300000039779531_5FA5FD4E37F04DCDA37C43ED142F2BC7_lorri.thomas40sharecare.com__ab70349/channel_1.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772250_C5651752B2B64B3289F50729F5387F0A_300000004855799_jejimenez40goempyrean.com_1__uiYtdRM/channel_1.wav",
+    "data/prepared_data/sharecare_january_2025/527373_300000039779982_35B104FE45834E0E8D712DEBF30119C1_stephanie.gage40sharecare.co_BsJDUFs/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-158664_5.128717199360926_3.0958512517874186/channel_0.wav",
+    "data/prepared_data/ezcater_april_2025/REdadf107e4dff77c80e1ba6dd5a46a405/channel_1.wav",
+    "data/prepared_data/empyrean_january_2025/1773106_7BE66D6B0CA8412284AC1E89A1A144A2_300000004857196_gpadilla40goempyrean.com_1_1_UROEhEu/channel_0.wav",
+    "data/prepared_data/carta_september_2024/call-150815_0.3604526947866142_5.894498441114608/channel_0.wav",
+    "data/prepared_data/fyf_june_2025_3hrs/300000007089785_55DD67E1B4A74ECEB1E1A4C046A2E837_SE.evsea440fromyouflowers.co_TZ81qhW/channel_0.wav",
+    "data/prepared_data/ezcater_april_2025/RE57585f0eb1dfaaa812788f77dd3e61d6/channel_1.wav",
+    "data/prepared_data/empyrean_january_2025/1773131_0ADB0DE584C9454DB5C6457C9A4A1030_300000004857203_nmuiruri40goempyrean.com_1_1_MdZ2anU/channel_0.wav",
+    "data/prepared_data/empyrean_january_2025/1773096_59F77A556D594CFB943401510BBC5098_300000004857172_dsmith40goempyrean.com_1_17__uCXKTkt/channel_0.wav",
+    "data/prepared_data/empyrean_v2_january_2025/1772143_7F3303571F254004A9C8242BD0394581_300000004855654_mpeterson40goempyrean.com_1__1kZjqIg/channel_1.wav"
+  ],
+  "batch_size": 8,
+  "calibration_backend": "qwen_asr_transformers_bfloat16_generate",
+  "format": "qwen3_asr_fp8_static_activation_scales",
+  "fp8_dtype": "float8_e4m3fn",
+  "fp8_max": 448.0,
+  "max_audio_seconds": 50.0,
+  "max_new_tokens": 512,
+  "minimum_scale": 4.359654017857143e-06,
+  "model": "Qwen/Qwen3-ASR-1.7B",
+  "modules": {
+    "thinker.audio_tower.conv_out": {
+      "absmax": 5.15625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          50,
+          13,
+          7680
+        ]
+      ],
+      "num_values": 638976000,
+      "scale": 0.0120849609375
+    },
+    "thinker.audio_tower.layers.0.fc1": {
+      "absmax": 13.3125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031201171875
+    },
+    "thinker.audio_tower.layers.0.fc2": {
+      "absmax": 4.125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.00966796875
+    },
+    "thinker.audio_tower.layers.0.self_attn.k_proj": {
+      "absmax": 2.796875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.00655517578125
+    },
+    "thinker.audio_tower.layers.0.self_attn.out_proj": {
+      "absmax": 3.90625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0091552734375
+    },
+    "thinker.audio_tower.layers.0.self_attn.q_proj": {
+      "absmax": 2.796875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.00655517578125
+    },
+    "thinker.audio_tower.layers.0.self_attn.v_proj": {
+      "absmax": 2.796875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.00655517578125
+    },
+    "thinker.audio_tower.layers.1.fc1": {
+      "absmax": 16.125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.03779296875
+    },
+    "thinker.audio_tower.layers.1.fc2": {
+      "absmax": 6.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.0146484375
+    },
+    "thinker.audio_tower.layers.1.self_attn.k_proj": {
+      "absmax": 9.125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.021386718750000002
+    },
+    "thinker.audio_tower.layers.1.self_attn.out_proj": {
+      "absmax": 1.703125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.00399169921875
+    },
+    "thinker.audio_tower.layers.1.self_attn.q_proj": {
+      "absmax": 9.125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.021386718750000002
+    },
+    "thinker.audio_tower.layers.1.self_attn.v_proj": {
+      "absmax": 9.125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.021386718750000002
+    },
+    "thinker.audio_tower.layers.10.fc1": {
+      "absmax": 16.5,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.038671875
+    },
+    "thinker.audio_tower.layers.10.fc2": {
+      "absmax": 7.03125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.0164794921875
+    },
+    "thinker.audio_tower.layers.10.self_attn.k_proj": {
+      "absmax": 9.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.022412109375
+    },
+    "thinker.audio_tower.layers.10.self_attn.out_proj": {
+      "absmax": 3.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0087890625
+    },
+    "thinker.audio_tower.layers.10.self_attn.q_proj": {
+      "absmax": 9.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.022412109375
+    },
+    "thinker.audio_tower.layers.10.self_attn.v_proj": {
+      "absmax": 9.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.022412109375
+    },
+    "thinker.audio_tower.layers.11.fc1": {
+      "absmax": 15.375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.03603515625
+    },
+    "thinker.audio_tower.layers.11.fc2": {
+      "absmax": 6.78125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.015893554687500002
+    },
+    "thinker.audio_tower.layers.11.self_attn.k_proj": {
+      "absmax": 11.4375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.026806640625
+    },
+    "thinker.audio_tower.layers.11.self_attn.out_proj": {
+      "absmax": 4.84375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0113525390625
+    },
+    "thinker.audio_tower.layers.11.self_attn.q_proj": {
+      "absmax": 11.4375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.026806640625
+    },
+    "thinker.audio_tower.layers.11.self_attn.v_proj": {
+      "absmax": 11.4375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.026806640625
+    },
+    "thinker.audio_tower.layers.12.fc1": {
+      "absmax": 14.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.035009765625
+    },
+    "thinker.audio_tower.layers.12.fc2": {
+      "absmax": 5.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.013623046875000001
+    },
+    "thinker.audio_tower.layers.12.self_attn.k_proj": {
+      "absmax": 11.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.027685546875
+    },
+    "thinker.audio_tower.layers.12.self_attn.out_proj": {
+      "absmax": 6.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0158203125
+    },
+    "thinker.audio_tower.layers.12.self_attn.q_proj": {
+      "absmax": 11.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.027685546875
+    },
+    "thinker.audio_tower.layers.12.self_attn.v_proj": {
+      "absmax": 11.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.027685546875
+    },
+    "thinker.audio_tower.layers.13.fc1": {
+      "absmax": 18.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.04365234375
+    },
+    "thinker.audio_tower.layers.13.fc2": {
+      "absmax": 8.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.020068359375
+    },
+    "thinker.audio_tower.layers.13.self_attn.k_proj": {
+      "absmax": 13.3125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031201171875
+    },
+    "thinker.audio_tower.layers.13.self_attn.out_proj": {
+      "absmax": 5.875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.01376953125
+    },
+    "thinker.audio_tower.layers.13.self_attn.q_proj": {
+      "absmax": 13.3125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031201171875
+    },
+    "thinker.audio_tower.layers.13.self_attn.v_proj": {
+      "absmax": 13.3125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031201171875
+    },
+    "thinker.audio_tower.layers.14.fc1": {
+      "absmax": 20.125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.047167968750000004
+    },
+    "thinker.audio_tower.layers.14.fc2": {
+      "absmax": 7.28125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.0170654296875
+    },
+    "thinker.audio_tower.layers.14.self_attn.k_proj": {
+      "absmax": 12.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.028710937500000002
+    },
+    "thinker.audio_tower.layers.14.self_attn.out_proj": {
+      "absmax": 4.59375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0107666015625
+    },
+    "thinker.audio_tower.layers.14.self_attn.q_proj": {
+      "absmax": 12.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.028710937500000002
+    },
+    "thinker.audio_tower.layers.14.self_attn.v_proj": {
+      "absmax": 12.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.028710937500000002
+    },
+    "thinker.audio_tower.layers.15.fc1": {
+      "absmax": 17.875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.04189453125
+    },
+    "thinker.audio_tower.layers.15.fc2": {
+      "absmax": 10.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.025634765625
+    },
+    "thinker.audio_tower.layers.15.self_attn.k_proj": {
+      "absmax": 13.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031787109375000004
+    },
+    "thinker.audio_tower.layers.15.self_attn.out_proj": {
+      "absmax": 4.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.01083984375
+    },
+    "thinker.audio_tower.layers.15.self_attn.q_proj": {
+      "absmax": 13.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031787109375000004
+    },
+    "thinker.audio_tower.layers.15.self_attn.v_proj": {
+      "absmax": 13.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031787109375000004
+    },
+    "thinker.audio_tower.layers.16.fc1": {
+      "absmax": 18.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0439453125
+    },
+    "thinker.audio_tower.layers.16.fc2": {
+      "absmax": 7.875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.018457031250000002
+    },
+    "thinker.audio_tower.layers.16.self_attn.k_proj": {
+      "absmax": 13.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031054687500000004
+    },
+    "thinker.audio_tower.layers.16.self_attn.out_proj": {
+      "absmax": 6.0,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.014062500000000002
+    },
+    "thinker.audio_tower.layers.16.self_attn.q_proj": {
+      "absmax": 13.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031054687500000004
+    },
+    "thinker.audio_tower.layers.16.self_attn.v_proj": {
+      "absmax": 13.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.031054687500000004
+    },
+    "thinker.audio_tower.layers.17.fc1": {
+      "absmax": 15.875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.03720703125
+    },
+    "thinker.audio_tower.layers.17.fc2": {
+      "absmax": 7.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.017724609375000002
+    },
+    "thinker.audio_tower.layers.17.self_attn.k_proj": {
+      "absmax": 8.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0205078125
+    },
+    "thinker.audio_tower.layers.17.self_attn.out_proj": {
+      "absmax": 4.6875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.010986328125
+    },
+    "thinker.audio_tower.layers.17.self_attn.q_proj": {
+      "absmax": 8.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0205078125
+    },
+    "thinker.audio_tower.layers.17.self_attn.v_proj": {
+      "absmax": 8.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0205078125
+    },
+    "thinker.audio_tower.layers.18.fc1": {
+      "absmax": 14.5,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.033984375000000004
+    },
+    "thinker.audio_tower.layers.18.fc2": {
+      "absmax": 9.1875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.021533203125
+    },
+    "thinker.audio_tower.layers.18.self_attn.k_proj": {
+      "absmax": 8.5,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.019921875000000002
+    },
+    "thinker.audio_tower.layers.18.self_attn.out_proj": {
+      "absmax": 4.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0111328125
+    },
+    "thinker.audio_tower.layers.18.self_attn.q_proj": {
+      "absmax": 8.5,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.019921875000000002
+    },
+    "thinker.audio_tower.layers.18.self_attn.v_proj": {
+      "absmax": 8.5,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.019921875000000002
+    },
+    "thinker.audio_tower.layers.19.fc1": {
+      "absmax": 12.6875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.029736328125
+    },
+    "thinker.audio_tower.layers.19.fc2": {
+      "absmax": 9.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.02255859375
+    },
+    "thinker.audio_tower.layers.19.self_attn.k_proj": {
+      "absmax": 8.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0193359375
+    },
+    "thinker.audio_tower.layers.19.self_attn.out_proj": {
+      "absmax": 5.15625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0120849609375
+    },
+    "thinker.audio_tower.layers.19.self_attn.q_proj": {
+      "absmax": 8.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0193359375
+    },
+    "thinker.audio_tower.layers.19.self_attn.v_proj": {
+      "absmax": 8.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0193359375
+    },
+    "thinker.audio_tower.layers.2.fc1": {
+      "absmax": 19.0,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.04453125
+    },
+    "thinker.audio_tower.layers.2.fc2": {
+      "absmax": 6.65625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.0156005859375
+    },
+    "thinker.audio_tower.layers.2.self_attn.k_proj": {
+      "absmax": 7.71875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.018090820312500002
+    },
+    "thinker.audio_tower.layers.2.self_attn.out_proj": {
+      "absmax": 1.9296875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0045227050781250005
+    },
+    "thinker.audio_tower.layers.2.self_attn.q_proj": {
+      "absmax": 7.71875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.018090820312500002
+    },
+    "thinker.audio_tower.layers.2.self_attn.v_proj": {
+      "absmax": 7.71875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.018090820312500002
+    },
+    "thinker.audio_tower.layers.20.fc1": {
+      "absmax": 12.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.029443359375000002
+    },
+    "thinker.audio_tower.layers.20.fc2": {
+      "absmax": 15.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.036914062500000004
+    },
+    "thinker.audio_tower.layers.20.self_attn.k_proj": {
+      "absmax": 8.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.020654296875000002
+    },
+    "thinker.audio_tower.layers.20.self_attn.out_proj": {
+      "absmax": 4.71875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.011059570312500001
+    },
+    "thinker.audio_tower.layers.20.self_attn.q_proj": {
+      "absmax": 8.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.020654296875000002
+    },
+    "thinker.audio_tower.layers.20.self_attn.v_proj": {
+      "absmax": 8.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.020654296875000002
+    },
+    "thinker.audio_tower.layers.21.fc1": {
+      "absmax": 15.875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.03720703125
+    },
+    "thinker.audio_tower.layers.21.fc2": {
+      "absmax": 11.0,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.025781250000000002
+    },
+    "thinker.audio_tower.layers.21.self_attn.k_proj": {
+      "absmax": 15.1875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.035595703125
+    },
+    "thinker.audio_tower.layers.21.self_attn.out_proj": {
+      "absmax": 4.53125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0106201171875
+    },
+    "thinker.audio_tower.layers.21.self_attn.q_proj": {
+      "absmax": 15.1875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.035595703125
+    },
+    "thinker.audio_tower.layers.21.self_attn.v_proj": {
+      "absmax": 15.1875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.035595703125
+    },
+    "thinker.audio_tower.layers.22.fc1": {
+      "absmax": 17.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0404296875
+    },
+    "thinker.audio_tower.layers.22.fc2": {
+      "absmax": 34.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.0802734375
+    },
+    "thinker.audio_tower.layers.22.self_attn.k_proj": {
+      "absmax": 11.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.027685546875
+    },
+    "thinker.audio_tower.layers.22.self_attn.out_proj": {
+      "absmax": 5.1875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.012158203125000001
+    },
+    "thinker.audio_tower.layers.22.self_attn.q_proj": {
+      "absmax": 11.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.027685546875
+    },
+    "thinker.audio_tower.layers.22.self_attn.v_proj": {
+      "absmax": 11.8125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.027685546875
+    },
+    "thinker.audio_tower.layers.23.fc1": {
+      "absmax": 25.375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.05947265625
+    },
+    "thinker.audio_tower.layers.23.fc2": {
+      "absmax": 63.75,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.1494140625
+    },
+    "thinker.audio_tower.layers.23.self_attn.k_proj": {
+      "absmax": 16.0,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0375
+    },
+    "thinker.audio_tower.layers.23.self_attn.out_proj": {
+      "absmax": 6.5,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.015234375
+    },
+    "thinker.audio_tower.layers.23.self_attn.q_proj": {
+      "absmax": 16.0,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0375
+    },
+    "thinker.audio_tower.layers.23.self_attn.v_proj": {
+      "absmax": 16.0,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0375
+    },
+    "thinker.audio_tower.layers.3.fc1": {
+      "absmax": 19.0,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.04453125
+    },
+    "thinker.audio_tower.layers.3.fc2": {
+      "absmax": 4.6875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.010986328125
+    },
+    "thinker.audio_tower.layers.3.self_attn.k_proj": {
+      "absmax": 9.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.022412109375
+    },
+    "thinker.audio_tower.layers.3.self_attn.out_proj": {
+      "absmax": 2.15625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0050537109375
+    },
+    "thinker.audio_tower.layers.3.self_attn.q_proj": {
+      "absmax": 9.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.022412109375
+    },
+    "thinker.audio_tower.layers.3.self_attn.v_proj": {
+      "absmax": 9.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.022412109375
+    },
+    "thinker.audio_tower.layers.4.fc1": {
+      "absmax": 21.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0498046875
+    },
+    "thinker.audio_tower.layers.4.fc2": {
+      "absmax": 7.53125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.0176513671875
+    },
+    "thinker.audio_tower.layers.4.self_attn.k_proj": {
+      "absmax": 10.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.025634765625
+    },
+    "thinker.audio_tower.layers.4.self_attn.out_proj": {
+      "absmax": 2.734375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.00640869140625
+    },
+    "thinker.audio_tower.layers.4.self_attn.q_proj": {
+      "absmax": 10.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.025634765625
+    },
+    "thinker.audio_tower.layers.4.self_attn.v_proj": {
+      "absmax": 10.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.025634765625
+    },
+    "thinker.audio_tower.layers.5.fc1": {
+      "absmax": 23.375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.05478515625
+    },
+    "thinker.audio_tower.layers.5.fc2": {
+      "absmax": 6.96875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.0163330078125
+    },
+    "thinker.audio_tower.layers.5.self_attn.k_proj": {
+      "absmax": 9.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.023291015625
+    },
+    "thinker.audio_tower.layers.5.self_attn.out_proj": {
+      "absmax": 3.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.008496093750000001
+    },
+    "thinker.audio_tower.layers.5.self_attn.q_proj": {
+      "absmax": 9.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.023291015625
+    },
+    "thinker.audio_tower.layers.5.self_attn.v_proj": {
+      "absmax": 9.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.023291015625
+    },
+    "thinker.audio_tower.layers.6.fc1": {
+      "absmax": 20.375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.04775390625
+    },
+    "thinker.audio_tower.layers.6.fc2": {
+      "absmax": 7.5,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.017578125
+    },
+    "thinker.audio_tower.layers.6.self_attn.k_proj": {
+      "absmax": 6.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.015380859375
+    },
+    "thinker.audio_tower.layers.6.self_attn.out_proj": {
+      "absmax": 3.234375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.007580566406250001
+    },
+    "thinker.audio_tower.layers.6.self_attn.q_proj": {
+      "absmax": 6.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.015380859375
+    },
+    "thinker.audio_tower.layers.6.self_attn.v_proj": {
+      "absmax": 6.5625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.015380859375
+    },
+    "thinker.audio_tower.layers.7.fc1": {
+      "absmax": 17.5,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.041015625
+    },
+    "thinker.audio_tower.layers.7.fc2": {
+      "absmax": 9.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.0216796875
+    },
+    "thinker.audio_tower.layers.7.self_attn.k_proj": {
+      "absmax": 10.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.02490234375
+    },
+    "thinker.audio_tower.layers.7.self_attn.out_proj": {
+      "absmax": 4.9375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.011572265625
+    },
+    "thinker.audio_tower.layers.7.self_attn.q_proj": {
+      "absmax": 10.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.02490234375
+    },
+    "thinker.audio_tower.layers.7.self_attn.v_proj": {
+      "absmax": 10.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.02490234375
+    },
+    "thinker.audio_tower.layers.8.fc1": {
+      "absmax": 15.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.03662109375
+    },
+    "thinker.audio_tower.layers.8.fc2": {
+      "absmax": 8.0625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.018896484375
+    },
+    "thinker.audio_tower.layers.8.self_attn.k_proj": {
+      "absmax": 15.4375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.036181640625000004
+    },
+    "thinker.audio_tower.layers.8.self_attn.out_proj": {
+      "absmax": 5.21875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0122314453125
+    },
+    "thinker.audio_tower.layers.8.self_attn.q_proj": {
+      "absmax": 15.4375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.036181640625000004
+    },
+    "thinker.audio_tower.layers.8.self_attn.v_proj": {
+      "absmax": 15.4375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.036181640625000004
+    },
+    "thinker.audio_tower.layers.9.fc1": {
+      "absmax": 16.375,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.038378906250000004
+    },
+    "thinker.audio_tower.layers.9.fc2": {
+      "absmax": 6.6875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          4096
+        ]
+      ],
+      "num_values": 340787200,
+      "scale": 0.015673828125
+    },
+    "thinker.audio_tower.layers.9.self_attn.k_proj": {
+      "absmax": 10.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.02490234375
+    },
+    "thinker.audio_tower.layers.9.self_attn.out_proj": {
+      "absmax": 3.421875,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.00802001953125
+    },
+    "thinker.audio_tower.layers.9.self_attn.q_proj": {
+      "absmax": 10.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.02490234375
+    },
+    "thinker.audio_tower.layers.9.self_attn.v_proj": {
+      "absmax": 10.625,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.02490234375
+    },
+    "thinker.audio_tower.proj1": {
+      "absmax": 26.25,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0615234375
+    },
+    "thinker.audio_tower.proj2": {
+      "absmax": 2.28125,
+      "calls": 128,
+      "input_shapes": [
+        [
+          650,
+          1024
+        ]
+      ],
+      "num_values": 85196800,
+      "scale": 0.0053466796875000005
+    },
+    "thinker.model.layers.0.mlp.down_proj": {
+      "absmax": 12.5625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.029443359375000002
+    },
+    "thinker.model.layers.0.mlp.gate_proj": {
+      "absmax": 9.1875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.021533203125
+    },
+    "thinker.model.layers.0.mlp.up_proj": {
+      "absmax": 9.1875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.021533203125
+    },
+    "thinker.model.layers.0.self_attn.k_proj": {
+      "absmax": 6.21875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0145751953125
+    },
+    "thinker.model.layers.0.self_attn.o_proj": {
+      "absmax": 2.65625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0062255859375
+    },
+    "thinker.model.layers.0.self_attn.q_proj": {
+      "absmax": 6.21875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0145751953125
+    },
+    "thinker.model.layers.0.self_attn.v_proj": {
+      "absmax": 6.21875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0145751953125
+    },
+    "thinker.model.layers.1.mlp.down_proj": {
+      "absmax": 21.875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.05126953125
+    },
+    "thinker.model.layers.1.mlp.gate_proj": {
+      "absmax": 45.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.10546875
+    },
+    "thinker.model.layers.1.mlp.up_proj": {
+      "absmax": 45.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.10546875
+    },
+    "thinker.model.layers.1.self_attn.k_proj": {
+      "absmax": 3.84375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0090087890625
+    },
+    "thinker.model.layers.1.self_attn.o_proj": {
+      "absmax": 1.234375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.00289306640625
+    },
+    "thinker.model.layers.1.self_attn.q_proj": {
+      "absmax": 3.84375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0090087890625
+    },
+    "thinker.model.layers.1.self_attn.v_proj": {
+      "absmax": 3.84375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0090087890625
+    },
+    "thinker.model.layers.10.mlp.down_proj": {
+      "absmax": 66.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.1546875
+    },
+    "thinker.model.layers.10.mlp.gate_proj": {
+      "absmax": 15.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.03662109375
+    },
+    "thinker.model.layers.10.mlp.up_proj": {
+      "absmax": 15.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.03662109375
+    },
+    "thinker.model.layers.10.self_attn.k_proj": {
+      "absmax": 29.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.06943359375000001
+    },
+    "thinker.model.layers.10.self_attn.o_proj": {
+      "absmax": 6.21875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0145751953125
+    },
+    "thinker.model.layers.10.self_attn.q_proj": {
+      "absmax": 29.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.06943359375000001
+    },
+    "thinker.model.layers.10.self_attn.v_proj": {
+      "absmax": 29.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.06943359375000001
+    },
+    "thinker.model.layers.11.mlp.down_proj": {
+      "absmax": 52.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.12363281250000001
+    },
+    "thinker.model.layers.11.mlp.gate_proj": {
+      "absmax": 13.0625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.030615234375
+    },
+    "thinker.model.layers.11.mlp.up_proj": {
+      "absmax": 13.0625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.030615234375
+    },
+    "thinker.model.layers.11.self_attn.k_proj": {
+      "absmax": 51.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1201171875
+    },
+    "thinker.model.layers.11.self_attn.o_proj": {
+      "absmax": 7.9375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.018603515625
+    },
+    "thinker.model.layers.11.self_attn.q_proj": {
+      "absmax": 51.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1201171875
+    },
+    "thinker.model.layers.11.self_attn.v_proj": {
+      "absmax": 51.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1201171875
+    },
+    "thinker.model.layers.12.mlp.down_proj": {
+      "absmax": 29.875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.07001953125
+    },
+    "thinker.model.layers.12.mlp.gate_proj": {
+      "absmax": 12.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.029589843750000004
+    },
+    "thinker.model.layers.12.mlp.up_proj": {
+      "absmax": 12.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.029589843750000004
+    },
+    "thinker.model.layers.12.self_attn.k_proj": {
+      "absmax": 48.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1130859375
+    },
+    "thinker.model.layers.12.self_attn.o_proj": {
+      "absmax": 10.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0234375
+    },
+    "thinker.model.layers.12.self_attn.q_proj": {
+      "absmax": 48.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1130859375
+    },
+    "thinker.model.layers.12.self_attn.v_proj": {
+      "absmax": 48.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1130859375
+    },
+    "thinker.model.layers.13.mlp.down_proj": {
+      "absmax": 69.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.16171875
+    },
+    "thinker.model.layers.13.mlp.gate_proj": {
+      "absmax": 14.0625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.032958984375
+    },
+    "thinker.model.layers.13.mlp.up_proj": {
+      "absmax": 14.0625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.032958984375
+    },
+    "thinker.model.layers.13.self_attn.k_proj": {
+      "absmax": 62.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1458984375
+    },
+    "thinker.model.layers.13.self_attn.o_proj": {
+      "absmax": 11.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.027246093750000002
+    },
+    "thinker.model.layers.13.self_attn.q_proj": {
+      "absmax": 62.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1458984375
+    },
+    "thinker.model.layers.13.self_attn.v_proj": {
+      "absmax": 62.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1458984375
+    },
+    "thinker.model.layers.14.mlp.down_proj": {
+      "absmax": 42.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.10019531250000001
+    },
+    "thinker.model.layers.14.mlp.gate_proj": {
+      "absmax": 15.125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.035449218750000004
+    },
+    "thinker.model.layers.14.mlp.up_proj": {
+      "absmax": 15.125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.035449218750000004
+    },
+    "thinker.model.layers.14.self_attn.k_proj": {
+      "absmax": 80.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.18867187500000002
+    },
+    "thinker.model.layers.14.self_attn.o_proj": {
+      "absmax": 77.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.18046875
+    },
+    "thinker.model.layers.14.self_attn.q_proj": {
+      "absmax": 80.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.18867187500000002
+    },
+    "thinker.model.layers.14.self_attn.v_proj": {
+      "absmax": 80.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.18867187500000002
+    },
+    "thinker.model.layers.15.mlp.down_proj": {
+      "absmax": 44.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.104296875
+    },
+    "thinker.model.layers.15.mlp.gate_proj": {
+      "absmax": 15.8125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.037060546875
+    },
+    "thinker.model.layers.15.mlp.up_proj": {
+      "absmax": 15.8125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.037060546875
+    },
+    "thinker.model.layers.15.self_attn.k_proj": {
+      "absmax": 99.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.233203125
+    },
+    "thinker.model.layers.15.self_attn.o_proj": {
+      "absmax": 11.8125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.027685546875
+    },
+    "thinker.model.layers.15.self_attn.q_proj": {
+      "absmax": 99.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.233203125
+    },
+    "thinker.model.layers.15.self_attn.v_proj": {
+      "absmax": 99.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.233203125
+    },
+    "thinker.model.layers.16.mlp.down_proj": {
+      "absmax": 95.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.22265625
+    },
+    "thinker.model.layers.16.mlp.gate_proj": {
+      "absmax": 17.125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04013671875
+    },
+    "thinker.model.layers.16.mlp.up_proj": {
+      "absmax": 17.125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04013671875
+    },
+    "thinker.model.layers.16.self_attn.k_proj": {
+      "absmax": 110.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.2578125
+    },
+    "thinker.model.layers.16.self_attn.o_proj": {
+      "absmax": 19.125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04482421875
+    },
+    "thinker.model.layers.16.self_attn.q_proj": {
+      "absmax": 110.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.2578125
+    },
+    "thinker.model.layers.16.self_attn.v_proj": {
+      "absmax": 110.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.2578125
+    },
+    "thinker.model.layers.17.mlp.down_proj": {
+      "absmax": 100.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.234375
+    },
+    "thinker.model.layers.17.mlp.gate_proj": {
+      "absmax": 22.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.053027343750000004
+    },
+    "thinker.model.layers.17.mlp.up_proj": {
+      "absmax": 22.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.053027343750000004
+    },
+    "thinker.model.layers.17.self_attn.k_proj": {
+      "absmax": 210.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.4921875
+    },
+    "thinker.model.layers.17.self_attn.o_proj": {
+      "absmax": 24.875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.05830078125
+    },
+    "thinker.model.layers.17.self_attn.q_proj": {
+      "absmax": 210.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.4921875
+    },
+    "thinker.model.layers.17.self_attn.v_proj": {
+      "absmax": 210.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.4921875
+    },
+    "thinker.model.layers.18.mlp.down_proj": {
+      "absmax": 152.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.35625
+    },
+    "thinker.model.layers.18.mlp.gate_proj": {
+      "absmax": 27.875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.06533203125
+    },
+    "thinker.model.layers.18.mlp.up_proj": {
+      "absmax": 27.875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.06533203125
+    },
+    "thinker.model.layers.18.self_attn.k_proj": {
+      "absmax": 155.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.36328125
+    },
+    "thinker.model.layers.18.self_attn.o_proj": {
+      "absmax": 27.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.06328125
+    },
+    "thinker.model.layers.18.self_attn.q_proj": {
+      "absmax": 155.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.36328125
+    },
+    "thinker.model.layers.18.self_attn.v_proj": {
+      "absmax": 155.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.36328125
+    },
+    "thinker.model.layers.19.mlp.down_proj": {
+      "absmax": 182.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.4265625
+    },
+    "thinker.model.layers.19.mlp.gate_proj": {
+      "absmax": 29.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0697265625
+    },
+    "thinker.model.layers.19.mlp.up_proj": {
+      "absmax": 29.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0697265625
+    },
+    "thinker.model.layers.19.self_attn.k_proj": {
+      "absmax": 186.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.43593750000000003
+    },
+    "thinker.model.layers.19.self_attn.o_proj": {
+      "absmax": 37.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0873046875
+    },
+    "thinker.model.layers.19.self_attn.q_proj": {
+      "absmax": 186.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.43593750000000003
+    },
+    "thinker.model.layers.19.self_attn.v_proj": {
+      "absmax": 186.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.43593750000000003
+    },
+    "thinker.model.layers.2.mlp.down_proj": {
+      "absmax": 14912.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 34.95
+    },
+    "thinker.model.layers.2.mlp.gate_proj": {
+      "absmax": 66.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.155859375
+    },
+    "thinker.model.layers.2.mlp.up_proj": {
+      "absmax": 66.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.155859375
+    },
+    "thinker.model.layers.2.self_attn.k_proj": {
+      "absmax": 4.71875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.011059570312500001
+    },
+    "thinker.model.layers.2.self_attn.o_proj": {
+      "absmax": 1.90625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0044677734375
+    },
+    "thinker.model.layers.2.self_attn.q_proj": {
+      "absmax": 4.71875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.011059570312500001
+    },
+    "thinker.model.layers.2.self_attn.v_proj": {
+      "absmax": 4.71875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.011059570312500001
+    },
+    "thinker.model.layers.20.mlp.down_proj": {
+      "absmax": 302.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.7078125000000001
+    },
+    "thinker.model.layers.20.mlp.gate_proj": {
+      "absmax": 34.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0802734375
+    },
+    "thinker.model.layers.20.mlp.up_proj": {
+      "absmax": 34.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0802734375
+    },
+    "thinker.model.layers.20.self_attn.k_proj": {
+      "absmax": 238.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.5578125
+    },
+    "thinker.model.layers.20.self_attn.o_proj": {
+      "absmax": 48.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.113671875
+    },
+    "thinker.model.layers.20.self_attn.q_proj": {
+      "absmax": 238.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.5578125
+    },
+    "thinker.model.layers.20.self_attn.v_proj": {
+      "absmax": 238.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.5578125
+    },
+    "thinker.model.layers.21.mlp.down_proj": {
+      "absmax": 370.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.8671875
+    },
+    "thinker.model.layers.21.mlp.gate_proj": {
+      "absmax": 39.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.09140625000000001
+    },
+    "thinker.model.layers.21.mlp.up_proj": {
+      "absmax": 39.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.09140625000000001
+    },
+    "thinker.model.layers.21.self_attn.k_proj": {
+      "absmax": 338.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.7921875
+    },
+    "thinker.model.layers.21.self_attn.o_proj": {
+      "absmax": 56.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.132421875
+    },
+    "thinker.model.layers.21.self_attn.q_proj": {
+      "absmax": 338.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.7921875
+    },
+    "thinker.model.layers.21.self_attn.v_proj": {
+      "absmax": 338.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.7921875
+    },
+    "thinker.model.layers.22.mlp.down_proj": {
+      "absmax": 498.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 1.1671875
+    },
+    "thinker.model.layers.22.mlp.gate_proj": {
+      "absmax": 42.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.099609375
+    },
+    "thinker.model.layers.22.mlp.up_proj": {
+      "absmax": 42.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.099609375
+    },
+    "thinker.model.layers.22.self_attn.k_proj": {
+      "absmax": 416.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.975
+    },
+    "thinker.model.layers.22.self_attn.o_proj": {
+      "absmax": 48.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1142578125
+    },
+    "thinker.model.layers.22.self_attn.q_proj": {
+      "absmax": 416.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.975
+    },
+    "thinker.model.layers.22.self_attn.v_proj": {
+      "absmax": 416.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.975
+    },
+    "thinker.model.layers.23.mlp.down_proj": {
+      "absmax": 458.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 1.0734375
+    },
+    "thinker.model.layers.23.mlp.gate_proj": {
+      "absmax": 41.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.09726562500000001
+    },
+    "thinker.model.layers.23.mlp.up_proj": {
+      "absmax": 41.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.09726562500000001
+    },
+    "thinker.model.layers.23.self_attn.k_proj": {
+      "absmax": 556.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.303125
+    },
+    "thinker.model.layers.23.self_attn.o_proj": {
+      "absmax": 103.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.24257812500000003
+    },
+    "thinker.model.layers.23.self_attn.q_proj": {
+      "absmax": 556.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.303125
+    },
+    "thinker.model.layers.23.self_attn.v_proj": {
+      "absmax": 556.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.303125
+    },
+    "thinker.model.layers.24.mlp.down_proj": {
+      "absmax": 428.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 1.003125
+    },
+    "thinker.model.layers.24.mlp.gate_proj": {
+      "absmax": 49.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1166015625
+    },
+    "thinker.model.layers.24.mlp.up_proj": {
+      "absmax": 49.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.1166015625
+    },
+    "thinker.model.layers.24.self_attn.k_proj": {
+      "absmax": 664.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.5562500000000001
+    },
+    "thinker.model.layers.24.self_attn.o_proj": {
+      "absmax": 83.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.195703125
+    },
+    "thinker.model.layers.24.self_attn.q_proj": {
+      "absmax": 664.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.5562500000000001
+    },
+    "thinker.model.layers.24.self_attn.v_proj": {
+      "absmax": 664.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.5562500000000001
+    },
+    "thinker.model.layers.25.mlp.down_proj": {
+      "absmax": 608.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 1.425
+    },
+    "thinker.model.layers.25.mlp.gate_proj": {
+      "absmax": 54.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.127734375
+    },
+    "thinker.model.layers.25.mlp.up_proj": {
+      "absmax": 54.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.127734375
+    },
+    "thinker.model.layers.25.self_attn.k_proj": {
+      "absmax": 772.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.809375
+    },
+    "thinker.model.layers.25.self_attn.o_proj": {
+      "absmax": 105.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.24726562500000002
+    },
+    "thinker.model.layers.25.self_attn.q_proj": {
+      "absmax": 772.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.809375
+    },
+    "thinker.model.layers.25.self_attn.v_proj": {
+      "absmax": 772.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.809375
+    },
+    "thinker.model.layers.26.mlp.down_proj": {
+      "absmax": 668.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 1.565625
+    },
+    "thinker.model.layers.26.mlp.gate_proj": {
+      "absmax": 74.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.174609375
+    },
+    "thinker.model.layers.26.mlp.up_proj": {
+      "absmax": 74.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.174609375
+    },
+    "thinker.model.layers.26.self_attn.k_proj": {
+      "absmax": 708.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.659375
+    },
+    "thinker.model.layers.26.self_attn.o_proj": {
+      "absmax": 112.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.263671875
+    },
+    "thinker.model.layers.26.self_attn.q_proj": {
+      "absmax": 708.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.659375
+    },
+    "thinker.model.layers.26.self_attn.v_proj": {
+      "absmax": 708.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 1.659375
+    },
+    "thinker.model.layers.27.mlp.down_proj": {
+      "absmax": 2192.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 5.1375
+    },
+    "thinker.model.layers.27.mlp.gate_proj": {
+      "absmax": 414.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.9703125000000001
+    },
+    "thinker.model.layers.27.mlp.up_proj": {
+      "absmax": 414.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.9703125000000001
+    },
+    "thinker.model.layers.27.self_attn.k_proj": {
+      "absmax": 408.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.95625
+    },
+    "thinker.model.layers.27.self_attn.o_proj": {
+      "absmax": 158.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.3703125
+    },
+    "thinker.model.layers.27.self_attn.q_proj": {
+      "absmax": 408.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.95625
+    },
+    "thinker.model.layers.27.self_attn.v_proj": {
+      "absmax": 408.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.95625
+    },
+    "thinker.model.layers.3.mlp.down_proj": {
+      "absmax": 23.875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.055957031250000004
+    },
+    "thinker.model.layers.3.mlp.gate_proj": {
+      "absmax": 33.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.078515625
+    },
+    "thinker.model.layers.3.mlp.up_proj": {
+      "absmax": 33.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.078515625
+    },
+    "thinker.model.layers.3.self_attn.k_proj": {
+      "absmax": 11.9375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.027978515625000002
+    },
+    "thinker.model.layers.3.self_attn.o_proj": {
+      "absmax": 2.65625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0062255859375
+    },
+    "thinker.model.layers.3.self_attn.q_proj": {
+      "absmax": 11.9375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.027978515625000002
+    },
+    "thinker.model.layers.3.self_attn.v_proj": {
+      "absmax": 11.9375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.027978515625000002
+    },
+    "thinker.model.layers.4.mlp.down_proj": {
+      "absmax": 29.5,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.069140625
+    },
+    "thinker.model.layers.4.mlp.gate_proj": {
+      "absmax": 31.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.07412109375
+    },
+    "thinker.model.layers.4.mlp.up_proj": {
+      "absmax": 31.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.07412109375
+    },
+    "thinker.model.layers.4.self_attn.k_proj": {
+      "absmax": 12.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.029589843750000004
+    },
+    "thinker.model.layers.4.self_attn.o_proj": {
+      "absmax": 3.671875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.00860595703125
+    },
+    "thinker.model.layers.4.self_attn.q_proj": {
+      "absmax": 12.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.029589843750000004
+    },
+    "thinker.model.layers.4.self_attn.v_proj": {
+      "absmax": 12.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.029589843750000004
+    },
+    "thinker.model.layers.5.mlp.down_proj": {
+      "absmax": 17.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.039843750000000004
+    },
+    "thinker.model.layers.5.mlp.gate_proj": {
+      "absmax": 17.375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04072265625
+    },
+    "thinker.model.layers.5.mlp.up_proj": {
+      "absmax": 17.375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04072265625
+    },
+    "thinker.model.layers.5.self_attn.k_proj": {
+      "absmax": 17.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.041308593750000004
+    },
+    "thinker.model.layers.5.self_attn.o_proj": {
+      "absmax": 3.515625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.00823974609375
+    },
+    "thinker.model.layers.5.self_attn.q_proj": {
+      "absmax": 17.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.041308593750000004
+    },
+    "thinker.model.layers.5.self_attn.v_proj": {
+      "absmax": 17.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.041308593750000004
+    },
+    "thinker.model.layers.6.mlp.down_proj": {
+      "absmax": 23.625,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.05537109375
+    },
+    "thinker.model.layers.6.mlp.gate_proj": {
+      "absmax": 15.8125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.037060546875
+    },
+    "thinker.model.layers.6.mlp.up_proj": {
+      "absmax": 15.8125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.037060546875
+    },
+    "thinker.model.layers.6.self_attn.k_proj": {
+      "absmax": 13.1875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.030908203125000002
+    },
+    "thinker.model.layers.6.self_attn.o_proj": {
+      "absmax": 3.59375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0084228515625
+    },
+    "thinker.model.layers.6.self_attn.q_proj": {
+      "absmax": 13.1875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.030908203125000002
+    },
+    "thinker.model.layers.6.self_attn.v_proj": {
+      "absmax": 13.1875,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.030908203125000002
+    },
+    "thinker.model.layers.7.mlp.down_proj": {
+      "absmax": 35.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.0837890625
+    },
+    "thinker.model.layers.7.mlp.gate_proj": {
+      "absmax": 21.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04921875
+    },
+    "thinker.model.layers.7.mlp.up_proj": {
+      "absmax": 21.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04921875
+    },
+    "thinker.model.layers.7.self_attn.k_proj": {
+      "absmax": 21.125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04951171875
+    },
+    "thinker.model.layers.7.self_attn.o_proj": {
+      "absmax": 5.28125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0123779296875
+    },
+    "thinker.model.layers.7.self_attn.q_proj": {
+      "absmax": 21.125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04951171875
+    },
+    "thinker.model.layers.7.self_attn.v_proj": {
+      "absmax": 21.125,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04951171875
+    },
+    "thinker.model.layers.8.mlp.down_proj": {
+      "absmax": 25.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.05859375
+    },
+    "thinker.model.layers.8.mlp.gate_proj": {
+      "absmax": 18.375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04306640625
+    },
+    "thinker.model.layers.8.mlp.up_proj": {
+      "absmax": 18.375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04306640625
+    },
+    "thinker.model.layers.8.self_attn.k_proj": {
+      "absmax": 20.375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04775390625
+    },
+    "thinker.model.layers.8.self_attn.o_proj": {
+      "absmax": 8.375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.01962890625
+    },
+    "thinker.model.layers.8.self_attn.q_proj": {
+      "absmax": 20.375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04775390625
+    },
+    "thinker.model.layers.8.self_attn.v_proj": {
+      "absmax": 20.375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.04775390625
+    },
+    "thinker.model.layers.9.mlp.down_proj": {
+      "absmax": 36.0,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          6144
+        ],
+        [
+          8,
+          665,
+          6144
+        ]
+      ],
+      "num_values": 629440512,
+      "scale": 0.084375
+    },
+    "thinker.model.layers.9.mlp.gate_proj": {
+      "absmax": 16.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0392578125
+    },
+    "thinker.model.layers.9.mlp.up_proj": {
+      "absmax": 16.75,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0392578125
+    },
+    "thinker.model.layers.9.self_attn.k_proj": {
+      "absmax": 32.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0755859375
+    },
+    "thinker.model.layers.9.self_attn.o_proj": {
+      "absmax": 7.4375,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.017431640625
+    },
+    "thinker.model.layers.9.self_attn.q_proj": {
+      "absmax": 32.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0755859375
+    },
+    "thinker.model.layers.9.self_attn.v_proj": {
+      "absmax": 32.25,
+      "calls": 2182,
+      "input_shapes": [
+        [
+          8,
+          1,
+          2048
+        ],
+        [
+          8,
+          665,
+          2048
+        ]
+      ],
+      "num_values": 209813504,
+      "scale": 0.0755859375
+    }
+  },
+  "qwen_asr_version": "0.0.6",
+  "revision": null,
+  "scale_margin": 1.05,
+  "seed": 0,
+  "torch_version": "2.11.0+cu128",
+  "transformers_version": "4.57.6",
+  "version": 1,
+  "vllm_fused_modules": {
+    "thinker.audio_tower.conv_out": {
+      "absmax": 5.15625,
+      "scale": 0.0120849609375,
+      "source_modules": [
+        "thinker.audio_tower.conv_out"
+      ]
+    },
+    "thinker.audio_tower.layers.0.fc1": {
+      "absmax": 13.3125,
+      "scale": 0.031201171875,
+      "source_modules": [
+        "thinker.audio_tower.layers.0.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.0.fc2": {
+      "absmax": 4.125,
+      "scale": 0.00966796875,
+      "source_modules": [
+        "thinker.audio_tower.layers.0.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.0.self_attn.out_proj": {
+      "absmax": 3.90625,
+      "scale": 0.0091552734375,
+      "source_modules": [
+        "thinker.audio_tower.layers.0.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.0.self_attn.qkv_proj": {
+      "absmax": 2.796875,
+      "scale": 0.00655517578125,
+      "source_modules": [
+        "thinker.audio_tower.layers.0.self_attn.k_proj",
+        "thinker.audio_tower.layers.0.self_attn.q_proj",
+        "thinker.audio_tower.layers.0.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.1.fc1": {
+      "absmax": 16.125,
+      "scale": 0.03779296875,
+      "source_modules": [
+        "thinker.audio_tower.layers.1.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.1.fc2": {
+      "absmax": 6.25,
+      "scale": 0.0146484375,
+      "source_modules": [
+        "thinker.audio_tower.layers.1.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.1.self_attn.out_proj": {
+      "absmax": 1.703125,
+      "scale": 0.00399169921875,
+      "source_modules": [
+        "thinker.audio_tower.layers.1.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.1.self_attn.qkv_proj": {
+      "absmax": 9.125,
+      "scale": 0.021386718750000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.1.self_attn.k_proj",
+        "thinker.audio_tower.layers.1.self_attn.q_proj",
+        "thinker.audio_tower.layers.1.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.10.fc1": {
+      "absmax": 16.5,
+      "scale": 0.038671875,
+      "source_modules": [
+        "thinker.audio_tower.layers.10.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.10.fc2": {
+      "absmax": 7.03125,
+      "scale": 0.0164794921875,
+      "source_modules": [
+        "thinker.audio_tower.layers.10.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.10.self_attn.out_proj": {
+      "absmax": 3.75,
+      "scale": 0.0087890625,
+      "source_modules": [
+        "thinker.audio_tower.layers.10.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.10.self_attn.qkv_proj": {
+      "absmax": 9.5625,
+      "scale": 0.022412109375,
+      "source_modules": [
+        "thinker.audio_tower.layers.10.self_attn.k_proj",
+        "thinker.audio_tower.layers.10.self_attn.q_proj",
+        "thinker.audio_tower.layers.10.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.11.fc1": {
+      "absmax": 15.375,
+      "scale": 0.03603515625,
+      "source_modules": [
+        "thinker.audio_tower.layers.11.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.11.fc2": {
+      "absmax": 6.78125,
+      "scale": 0.015893554687500002,
+      "source_modules": [
+        "thinker.audio_tower.layers.11.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.11.self_attn.out_proj": {
+      "absmax": 4.84375,
+      "scale": 0.0113525390625,
+      "source_modules": [
+        "thinker.audio_tower.layers.11.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.11.self_attn.qkv_proj": {
+      "absmax": 11.4375,
+      "scale": 0.026806640625,
+      "source_modules": [
+        "thinker.audio_tower.layers.11.self_attn.k_proj",
+        "thinker.audio_tower.layers.11.self_attn.q_proj",
+        "thinker.audio_tower.layers.11.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.12.fc1": {
+      "absmax": 14.9375,
+      "scale": 0.035009765625,
+      "source_modules": [
+        "thinker.audio_tower.layers.12.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.12.fc2": {
+      "absmax": 5.8125,
+      "scale": 0.013623046875000001,
+      "source_modules": [
+        "thinker.audio_tower.layers.12.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.12.self_attn.out_proj": {
+      "absmax": 6.75,
+      "scale": 0.0158203125,
+      "source_modules": [
+        "thinker.audio_tower.layers.12.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.12.self_attn.qkv_proj": {
+      "absmax": 11.8125,
+      "scale": 0.027685546875,
+      "source_modules": [
+        "thinker.audio_tower.layers.12.self_attn.k_proj",
+        "thinker.audio_tower.layers.12.self_attn.q_proj",
+        "thinker.audio_tower.layers.12.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.13.fc1": {
+      "absmax": 18.625,
+      "scale": 0.04365234375,
+      "source_modules": [
+        "thinker.audio_tower.layers.13.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.13.fc2": {
+      "absmax": 8.5625,
+      "scale": 0.020068359375,
+      "source_modules": [
+        "thinker.audio_tower.layers.13.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.13.self_attn.out_proj": {
+      "absmax": 5.875,
+      "scale": 0.01376953125,
+      "source_modules": [
+        "thinker.audio_tower.layers.13.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.13.self_attn.qkv_proj": {
+      "absmax": 13.3125,
+      "scale": 0.031201171875,
+      "source_modules": [
+        "thinker.audio_tower.layers.13.self_attn.k_proj",
+        "thinker.audio_tower.layers.13.self_attn.q_proj",
+        "thinker.audio_tower.layers.13.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.14.fc1": {
+      "absmax": 20.125,
+      "scale": 0.047167968750000004,
+      "source_modules": [
+        "thinker.audio_tower.layers.14.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.14.fc2": {
+      "absmax": 7.28125,
+      "scale": 0.0170654296875,
+      "source_modules": [
+        "thinker.audio_tower.layers.14.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.14.self_attn.out_proj": {
+      "absmax": 4.59375,
+      "scale": 0.0107666015625,
+      "source_modules": [
+        "thinker.audio_tower.layers.14.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.14.self_attn.qkv_proj": {
+      "absmax": 12.25,
+      "scale": 0.028710937500000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.14.self_attn.k_proj",
+        "thinker.audio_tower.layers.14.self_attn.q_proj",
+        "thinker.audio_tower.layers.14.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.15.fc1": {
+      "absmax": 17.875,
+      "scale": 0.04189453125,
+      "source_modules": [
+        "thinker.audio_tower.layers.15.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.15.fc2": {
+      "absmax": 10.9375,
+      "scale": 0.025634765625,
+      "source_modules": [
+        "thinker.audio_tower.layers.15.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.15.self_attn.out_proj": {
+      "absmax": 4.625,
+      "scale": 0.01083984375,
+      "source_modules": [
+        "thinker.audio_tower.layers.15.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.15.self_attn.qkv_proj": {
+      "absmax": 13.5625,
+      "scale": 0.031787109375000004,
+      "source_modules": [
+        "thinker.audio_tower.layers.15.self_attn.k_proj",
+        "thinker.audio_tower.layers.15.self_attn.q_proj",
+        "thinker.audio_tower.layers.15.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.16.fc1": {
+      "absmax": 18.75,
+      "scale": 0.0439453125,
+      "source_modules": [
+        "thinker.audio_tower.layers.16.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.16.fc2": {
+      "absmax": 7.875,
+      "scale": 0.018457031250000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.16.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.16.self_attn.out_proj": {
+      "absmax": 6.0,
+      "scale": 0.014062500000000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.16.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.16.self_attn.qkv_proj": {
+      "absmax": 13.25,
+      "scale": 0.031054687500000004,
+      "source_modules": [
+        "thinker.audio_tower.layers.16.self_attn.k_proj",
+        "thinker.audio_tower.layers.16.self_attn.q_proj",
+        "thinker.audio_tower.layers.16.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.17.fc1": {
+      "absmax": 15.875,
+      "scale": 0.03720703125,
+      "source_modules": [
+        "thinker.audio_tower.layers.17.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.17.fc2": {
+      "absmax": 7.5625,
+      "scale": 0.017724609375000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.17.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.17.self_attn.out_proj": {
+      "absmax": 4.6875,
+      "scale": 0.010986328125,
+      "source_modules": [
+        "thinker.audio_tower.layers.17.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.17.self_attn.qkv_proj": {
+      "absmax": 8.75,
+      "scale": 0.0205078125,
+      "source_modules": [
+        "thinker.audio_tower.layers.17.self_attn.k_proj",
+        "thinker.audio_tower.layers.17.self_attn.q_proj",
+        "thinker.audio_tower.layers.17.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.18.fc1": {
+      "absmax": 14.5,
+      "scale": 0.033984375000000004,
+      "source_modules": [
+        "thinker.audio_tower.layers.18.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.18.fc2": {
+      "absmax": 9.1875,
+      "scale": 0.021533203125,
+      "source_modules": [
+        "thinker.audio_tower.layers.18.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.18.self_attn.out_proj": {
+      "absmax": 4.75,
+      "scale": 0.0111328125,
+      "source_modules": [
+        "thinker.audio_tower.layers.18.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.18.self_attn.qkv_proj": {
+      "absmax": 8.5,
+      "scale": 0.019921875000000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.18.self_attn.k_proj",
+        "thinker.audio_tower.layers.18.self_attn.q_proj",
+        "thinker.audio_tower.layers.18.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.19.fc1": {
+      "absmax": 12.6875,
+      "scale": 0.029736328125,
+      "source_modules": [
+        "thinker.audio_tower.layers.19.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.19.fc2": {
+      "absmax": 9.625,
+      "scale": 0.02255859375,
+      "source_modules": [
+        "thinker.audio_tower.layers.19.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.19.self_attn.out_proj": {
+      "absmax": 5.15625,
+      "scale": 0.0120849609375,
+      "source_modules": [
+        "thinker.audio_tower.layers.19.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.19.self_attn.qkv_proj": {
+      "absmax": 8.25,
+      "scale": 0.0193359375,
+      "source_modules": [
+        "thinker.audio_tower.layers.19.self_attn.k_proj",
+        "thinker.audio_tower.layers.19.self_attn.q_proj",
+        "thinker.audio_tower.layers.19.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.2.fc1": {
+      "absmax": 19.0,
+      "scale": 0.04453125,
+      "source_modules": [
+        "thinker.audio_tower.layers.2.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.2.fc2": {
+      "absmax": 6.65625,
+      "scale": 0.0156005859375,
+      "source_modules": [
+        "thinker.audio_tower.layers.2.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.2.self_attn.out_proj": {
+      "absmax": 1.9296875,
+      "scale": 0.0045227050781250005,
+      "source_modules": [
+        "thinker.audio_tower.layers.2.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.2.self_attn.qkv_proj": {
+      "absmax": 7.71875,
+      "scale": 0.018090820312500002,
+      "source_modules": [
+        "thinker.audio_tower.layers.2.self_attn.k_proj",
+        "thinker.audio_tower.layers.2.self_attn.q_proj",
+        "thinker.audio_tower.layers.2.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.20.fc1": {
+      "absmax": 12.5625,
+      "scale": 0.029443359375000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.20.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.20.fc2": {
+      "absmax": 15.75,
+      "scale": 0.036914062500000004,
+      "source_modules": [
+        "thinker.audio_tower.layers.20.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.20.self_attn.out_proj": {
+      "absmax": 4.71875,
+      "scale": 0.011059570312500001,
+      "source_modules": [
+        "thinker.audio_tower.layers.20.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.20.self_attn.qkv_proj": {
+      "absmax": 8.8125,
+      "scale": 0.020654296875000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.20.self_attn.k_proj",
+        "thinker.audio_tower.layers.20.self_attn.q_proj",
+        "thinker.audio_tower.layers.20.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.21.fc1": {
+      "absmax": 15.875,
+      "scale": 0.03720703125,
+      "source_modules": [
+        "thinker.audio_tower.layers.21.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.21.fc2": {
+      "absmax": 11.0,
+      "scale": 0.025781250000000002,
+      "source_modules": [
+        "thinker.audio_tower.layers.21.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.21.self_attn.out_proj": {
+      "absmax": 4.53125,
+      "scale": 0.0106201171875,
+      "source_modules": [
+        "thinker.audio_tower.layers.21.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.21.self_attn.qkv_proj": {
+      "absmax": 15.1875,
+      "scale": 0.035595703125,
+      "source_modules": [
+        "thinker.audio_tower.layers.21.self_attn.k_proj",
+        "thinker.audio_tower.layers.21.self_attn.q_proj",
+        "thinker.audio_tower.layers.21.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.22.fc1": {
+      "absmax": 17.25,
+      "scale": 0.0404296875,
+      "source_modules": [
+        "thinker.audio_tower.layers.22.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.22.fc2": {
+      "absmax": 34.25,
+      "scale": 0.0802734375,
+      "source_modules": [
+        "thinker.audio_tower.layers.22.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.22.self_attn.out_proj": {
+      "absmax": 5.1875,
+      "scale": 0.012158203125000001,
+      "source_modules": [
+        "thinker.audio_tower.layers.22.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.22.self_attn.qkv_proj": {
+      "absmax": 11.8125,
+      "scale": 0.027685546875,
+      "source_modules": [
+        "thinker.audio_tower.layers.22.self_attn.k_proj",
+        "thinker.audio_tower.layers.22.self_attn.q_proj",
+        "thinker.audio_tower.layers.22.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.23.fc1": {
+      "absmax": 25.375,
+      "scale": 0.05947265625,
+      "source_modules": [
+        "thinker.audio_tower.layers.23.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.23.fc2": {
+      "absmax": 63.75,
+      "scale": 0.1494140625,
+      "source_modules": [
+        "thinker.audio_tower.layers.23.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.23.self_attn.out_proj": {
+      "absmax": 6.5,
+      "scale": 0.015234375,
+      "source_modules": [
+        "thinker.audio_tower.layers.23.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.23.self_attn.qkv_proj": {
+      "absmax": 16.0,
+      "scale": 0.0375,
+      "source_modules": [
+        "thinker.audio_tower.layers.23.self_attn.k_proj",
+        "thinker.audio_tower.layers.23.self_attn.q_proj",
+        "thinker.audio_tower.layers.23.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.3.fc1": {
+      "absmax": 19.0,
+      "scale": 0.04453125,
+      "source_modules": [
+        "thinker.audio_tower.layers.3.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.3.fc2": {
+      "absmax": 4.6875,
+      "scale": 0.010986328125,
+      "source_modules": [
+        "thinker.audio_tower.layers.3.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.3.self_attn.out_proj": {
+      "absmax": 2.15625,
+      "scale": 0.0050537109375,
+      "source_modules": [
+        "thinker.audio_tower.layers.3.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.3.self_attn.qkv_proj": {
+      "absmax": 9.5625,
+      "scale": 0.022412109375,
+      "source_modules": [
+        "thinker.audio_tower.layers.3.self_attn.k_proj",
+        "thinker.audio_tower.layers.3.self_attn.q_proj",
+        "thinker.audio_tower.layers.3.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.4.fc1": {
+      "absmax": 21.25,
+      "scale": 0.0498046875,
+      "source_modules": [
+        "thinker.audio_tower.layers.4.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.4.fc2": {
+      "absmax": 7.53125,
+      "scale": 0.0176513671875,
+      "source_modules": [
+        "thinker.audio_tower.layers.4.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.4.self_attn.out_proj": {
+      "absmax": 2.734375,
+      "scale": 0.00640869140625,
+      "source_modules": [
+        "thinker.audio_tower.layers.4.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.4.self_attn.qkv_proj": {
+      "absmax": 10.9375,
+      "scale": 0.025634765625,
+      "source_modules": [
+        "thinker.audio_tower.layers.4.self_attn.k_proj",
+        "thinker.audio_tower.layers.4.self_attn.q_proj",
+        "thinker.audio_tower.layers.4.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.5.fc1": {
+      "absmax": 23.375,
+      "scale": 0.05478515625,
+      "source_modules": [
+        "thinker.audio_tower.layers.5.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.5.fc2": {
+      "absmax": 6.96875,
+      "scale": 0.0163330078125,
+      "source_modules": [
+        "thinker.audio_tower.layers.5.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.5.self_attn.out_proj": {
+      "absmax": 3.625,
+      "scale": 0.008496093750000001,
+      "source_modules": [
+        "thinker.audio_tower.layers.5.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.5.self_attn.qkv_proj": {
+      "absmax": 9.9375,
+      "scale": 0.023291015625,
+      "source_modules": [
+        "thinker.audio_tower.layers.5.self_attn.k_proj",
+        "thinker.audio_tower.layers.5.self_attn.q_proj",
+        "thinker.audio_tower.layers.5.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.6.fc1": {
+      "absmax": 20.375,
+      "scale": 0.04775390625,
+      "source_modules": [
+        "thinker.audio_tower.layers.6.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.6.fc2": {
+      "absmax": 7.5,
+      "scale": 0.017578125,
+      "source_modules": [
+        "thinker.audio_tower.layers.6.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.6.self_attn.out_proj": {
+      "absmax": 3.234375,
+      "scale": 0.007580566406250001,
+      "source_modules": [
+        "thinker.audio_tower.layers.6.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.6.self_attn.qkv_proj": {
+      "absmax": 6.5625,
+      "scale": 0.015380859375,
+      "source_modules": [
+        "thinker.audio_tower.layers.6.self_attn.k_proj",
+        "thinker.audio_tower.layers.6.self_attn.q_proj",
+        "thinker.audio_tower.layers.6.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.7.fc1": {
+      "absmax": 17.5,
+      "scale": 0.041015625,
+      "source_modules": [
+        "thinker.audio_tower.layers.7.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.7.fc2": {
+      "absmax": 9.25,
+      "scale": 0.0216796875,
+      "source_modules": [
+        "thinker.audio_tower.layers.7.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.7.self_attn.out_proj": {
+      "absmax": 4.9375,
+      "scale": 0.011572265625,
+      "source_modules": [
+        "thinker.audio_tower.layers.7.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.7.self_attn.qkv_proj": {
+      "absmax": 10.625,
+      "scale": 0.02490234375,
+      "source_modules": [
+        "thinker.audio_tower.layers.7.self_attn.k_proj",
+        "thinker.audio_tower.layers.7.self_attn.q_proj",
+        "thinker.audio_tower.layers.7.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.8.fc1": {
+      "absmax": 15.625,
+      "scale": 0.03662109375,
+      "source_modules": [
+        "thinker.audio_tower.layers.8.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.8.fc2": {
+      "absmax": 8.0625,
+      "scale": 0.018896484375,
+      "source_modules": [
+        "thinker.audio_tower.layers.8.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.8.self_attn.out_proj": {
+      "absmax": 5.21875,
+      "scale": 0.0122314453125,
+      "source_modules": [
+        "thinker.audio_tower.layers.8.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.8.self_attn.qkv_proj": {
+      "absmax": 15.4375,
+      "scale": 0.036181640625000004,
+      "source_modules": [
+        "thinker.audio_tower.layers.8.self_attn.k_proj",
+        "thinker.audio_tower.layers.8.self_attn.q_proj",
+        "thinker.audio_tower.layers.8.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.9.fc1": {
+      "absmax": 16.375,
+      "scale": 0.038378906250000004,
+      "source_modules": [
+        "thinker.audio_tower.layers.9.fc1"
+      ]
+    },
+    "thinker.audio_tower.layers.9.fc2": {
+      "absmax": 6.6875,
+      "scale": 0.015673828125,
+      "source_modules": [
+        "thinker.audio_tower.layers.9.fc2"
+      ]
+    },
+    "thinker.audio_tower.layers.9.self_attn.out_proj": {
+      "absmax": 3.421875,
+      "scale": 0.00802001953125,
+      "source_modules": [
+        "thinker.audio_tower.layers.9.self_attn.out_proj"
+      ]
+    },
+    "thinker.audio_tower.layers.9.self_attn.qkv_proj": {
+      "absmax": 10.625,
+      "scale": 0.02490234375,
+      "source_modules": [
+        "thinker.audio_tower.layers.9.self_attn.k_proj",
+        "thinker.audio_tower.layers.9.self_attn.q_proj",
+        "thinker.audio_tower.layers.9.self_attn.v_proj"
+      ]
+    },
+    "thinker.audio_tower.proj1": {
+      "absmax": 26.25,
+      "scale": 0.0615234375,
+      "source_modules": [
+        "thinker.audio_tower.proj1"
+      ]
+    },
+    "thinker.audio_tower.proj2": {
+      "absmax": 2.28125,
+      "scale": 0.0053466796875000005,
+      "source_modules": [
+        "thinker.audio_tower.proj2"
+      ]
+    },
+    "thinker.model.layers.0.mlp.down_proj": {
+      "absmax": 12.5625,
+      "scale": 0.029443359375000002,
+      "source_modules": [
+        "thinker.model.layers.0.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.0.mlp.gate_up_proj": {
+      "absmax": 9.1875,
+      "scale": 0.021533203125,
+      "source_modules": [
+        "thinker.model.layers.0.mlp.gate_proj",
+        "thinker.model.layers.0.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.0.self_attn.o_proj": {
+      "absmax": 2.65625,
+      "scale": 0.0062255859375,
+      "source_modules": [
+        "thinker.model.layers.0.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.0.self_attn.qkv_proj": {
+      "absmax": 6.21875,
+      "scale": 0.0145751953125,
+      "source_modules": [
+        "thinker.model.layers.0.self_attn.k_proj",
+        "thinker.model.layers.0.self_attn.q_proj",
+        "thinker.model.layers.0.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.1.mlp.down_proj": {
+      "absmax": 21.875,
+      "scale": 0.05126953125,
+      "source_modules": [
+        "thinker.model.layers.1.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.1.mlp.gate_up_proj": {
+      "absmax": 45.0,
+      "scale": 0.10546875,
+      "source_modules": [
+        "thinker.model.layers.1.mlp.gate_proj",
+        "thinker.model.layers.1.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.1.self_attn.o_proj": {
+      "absmax": 1.234375,
+      "scale": 0.00289306640625,
+      "source_modules": [
+        "thinker.model.layers.1.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.1.self_attn.qkv_proj": {
+      "absmax": 3.84375,
+      "scale": 0.0090087890625,
+      "source_modules": [
+        "thinker.model.layers.1.self_attn.k_proj",
+        "thinker.model.layers.1.self_attn.q_proj",
+        "thinker.model.layers.1.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.10.mlp.down_proj": {
+      "absmax": 66.0,
+      "scale": 0.1546875,
+      "source_modules": [
+        "thinker.model.layers.10.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.10.mlp.gate_up_proj": {
+      "absmax": 15.625,
+      "scale": 0.03662109375,
+      "source_modules": [
+        "thinker.model.layers.10.mlp.gate_proj",
+        "thinker.model.layers.10.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.10.self_attn.o_proj": {
+      "absmax": 6.21875,
+      "scale": 0.0145751953125,
+      "source_modules": [
+        "thinker.model.layers.10.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.10.self_attn.qkv_proj": {
+      "absmax": 29.625,
+      "scale": 0.06943359375000001,
+      "source_modules": [
+        "thinker.model.layers.10.self_attn.k_proj",
+        "thinker.model.layers.10.self_attn.q_proj",
+        "thinker.model.layers.10.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.11.mlp.down_proj": {
+      "absmax": 52.75,
+      "scale": 0.12363281250000001,
+      "source_modules": [
+        "thinker.model.layers.11.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.11.mlp.gate_up_proj": {
+      "absmax": 13.0625,
+      "scale": 0.030615234375,
+      "source_modules": [
+        "thinker.model.layers.11.mlp.gate_proj",
+        "thinker.model.layers.11.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.11.self_attn.o_proj": {
+      "absmax": 7.9375,
+      "scale": 0.018603515625,
+      "source_modules": [
+        "thinker.model.layers.11.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.11.self_attn.qkv_proj": {
+      "absmax": 51.25,
+      "scale": 0.1201171875,
+      "source_modules": [
+        "thinker.model.layers.11.self_attn.k_proj",
+        "thinker.model.layers.11.self_attn.q_proj",
+        "thinker.model.layers.11.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.12.mlp.down_proj": {
+      "absmax": 29.875,
+      "scale": 0.07001953125,
+      "source_modules": [
+        "thinker.model.layers.12.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.12.mlp.gate_up_proj": {
+      "absmax": 12.625,
+      "scale": 0.029589843750000004,
+      "source_modules": [
+        "thinker.model.layers.12.mlp.gate_proj",
+        "thinker.model.layers.12.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.12.self_attn.o_proj": {
+      "absmax": 10.0,
+      "scale": 0.0234375,
+      "source_modules": [
+        "thinker.model.layers.12.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.12.self_attn.qkv_proj": {
+      "absmax": 48.25,
+      "scale": 0.1130859375,
+      "source_modules": [
+        "thinker.model.layers.12.self_attn.k_proj",
+        "thinker.model.layers.12.self_attn.q_proj",
+        "thinker.model.layers.12.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.13.mlp.down_proj": {
+      "absmax": 69.0,
+      "scale": 0.16171875,
+      "source_modules": [
+        "thinker.model.layers.13.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.13.mlp.gate_up_proj": {
+      "absmax": 14.0625,
+      "scale": 0.032958984375,
+      "source_modules": [
+        "thinker.model.layers.13.mlp.gate_proj",
+        "thinker.model.layers.13.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.13.self_attn.o_proj": {
+      "absmax": 11.625,
+      "scale": 0.027246093750000002,
+      "source_modules": [
+        "thinker.model.layers.13.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.13.self_attn.qkv_proj": {
+      "absmax": 62.25,
+      "scale": 0.1458984375,
+      "source_modules": [
+        "thinker.model.layers.13.self_attn.k_proj",
+        "thinker.model.layers.13.self_attn.q_proj",
+        "thinker.model.layers.13.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.14.mlp.down_proj": {
+      "absmax": 42.75,
+      "scale": 0.10019531250000001,
+      "source_modules": [
+        "thinker.model.layers.14.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.14.mlp.gate_up_proj": {
+      "absmax": 15.125,
+      "scale": 0.035449218750000004,
+      "source_modules": [
+        "thinker.model.layers.14.mlp.gate_proj",
+        "thinker.model.layers.14.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.14.self_attn.o_proj": {
+      "absmax": 77.0,
+      "scale": 0.18046875,
+      "source_modules": [
+        "thinker.model.layers.14.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.14.self_attn.qkv_proj": {
+      "absmax": 80.5,
+      "scale": 0.18867187500000002,
+      "source_modules": [
+        "thinker.model.layers.14.self_attn.k_proj",
+        "thinker.model.layers.14.self_attn.q_proj",
+        "thinker.model.layers.14.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.15.mlp.down_proj": {
+      "absmax": 44.5,
+      "scale": 0.104296875,
+      "source_modules": [
+        "thinker.model.layers.15.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.15.mlp.gate_up_proj": {
+      "absmax": 15.8125,
+      "scale": 0.037060546875,
+      "source_modules": [
+        "thinker.model.layers.15.mlp.gate_proj",
+        "thinker.model.layers.15.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.15.self_attn.o_proj": {
+      "absmax": 11.8125,
+      "scale": 0.027685546875,
+      "source_modules": [
+        "thinker.model.layers.15.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.15.self_attn.qkv_proj": {
+      "absmax": 99.5,
+      "scale": 0.233203125,
+      "source_modules": [
+        "thinker.model.layers.15.self_attn.k_proj",
+        "thinker.model.layers.15.self_attn.q_proj",
+        "thinker.model.layers.15.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.16.mlp.down_proj": {
+      "absmax": 95.0,
+      "scale": 0.22265625,
+      "source_modules": [
+        "thinker.model.layers.16.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.16.mlp.gate_up_proj": {
+      "absmax": 17.125,
+      "scale": 0.04013671875,
+      "source_modules": [
+        "thinker.model.layers.16.mlp.gate_proj",
+        "thinker.model.layers.16.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.16.self_attn.o_proj": {
+      "absmax": 19.125,
+      "scale": 0.04482421875,
+      "source_modules": [
+        "thinker.model.layers.16.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.16.self_attn.qkv_proj": {
+      "absmax": 110.0,
+      "scale": 0.2578125,
+      "source_modules": [
+        "thinker.model.layers.16.self_attn.k_proj",
+        "thinker.model.layers.16.self_attn.q_proj",
+        "thinker.model.layers.16.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.17.mlp.down_proj": {
+      "absmax": 100.0,
+      "scale": 0.234375,
+      "source_modules": [
+        "thinker.model.layers.17.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.17.mlp.gate_up_proj": {
+      "absmax": 22.625,
+      "scale": 0.053027343750000004,
+      "source_modules": [
+        "thinker.model.layers.17.mlp.gate_proj",
+        "thinker.model.layers.17.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.17.self_attn.o_proj": {
+      "absmax": 24.875,
+      "scale": 0.05830078125,
+      "source_modules": [
+        "thinker.model.layers.17.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.17.self_attn.qkv_proj": {
+      "absmax": 210.0,
+      "scale": 0.4921875,
+      "source_modules": [
+        "thinker.model.layers.17.self_attn.k_proj",
+        "thinker.model.layers.17.self_attn.q_proj",
+        "thinker.model.layers.17.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.18.mlp.down_proj": {
+      "absmax": 152.0,
+      "scale": 0.35625,
+      "source_modules": [
+        "thinker.model.layers.18.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.18.mlp.gate_up_proj": {
+      "absmax": 27.875,
+      "scale": 0.06533203125,
+      "source_modules": [
+        "thinker.model.layers.18.mlp.gate_proj",
+        "thinker.model.layers.18.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.18.self_attn.o_proj": {
+      "absmax": 27.0,
+      "scale": 0.06328125,
+      "source_modules": [
+        "thinker.model.layers.18.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.18.self_attn.qkv_proj": {
+      "absmax": 155.0,
+      "scale": 0.36328125,
+      "source_modules": [
+        "thinker.model.layers.18.self_attn.k_proj",
+        "thinker.model.layers.18.self_attn.q_proj",
+        "thinker.model.layers.18.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.19.mlp.down_proj": {
+      "absmax": 182.0,
+      "scale": 0.4265625,
+      "source_modules": [
+        "thinker.model.layers.19.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.19.mlp.gate_up_proj": {
+      "absmax": 29.75,
+      "scale": 0.0697265625,
+      "source_modules": [
+        "thinker.model.layers.19.mlp.gate_proj",
+        "thinker.model.layers.19.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.19.self_attn.o_proj": {
+      "absmax": 37.25,
+      "scale": 0.0873046875,
+      "source_modules": [
+        "thinker.model.layers.19.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.19.self_attn.qkv_proj": {
+      "absmax": 186.0,
+      "scale": 0.43593750000000003,
+      "source_modules": [
+        "thinker.model.layers.19.self_attn.k_proj",
+        "thinker.model.layers.19.self_attn.q_proj",
+        "thinker.model.layers.19.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.2.mlp.down_proj": {
+      "absmax": 14912.0,
+      "scale": 34.95,
+      "source_modules": [
+        "thinker.model.layers.2.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.2.mlp.gate_up_proj": {
+      "absmax": 66.5,
+      "scale": 0.155859375,
+      "source_modules": [
+        "thinker.model.layers.2.mlp.gate_proj",
+        "thinker.model.layers.2.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.2.self_attn.o_proj": {
+      "absmax": 1.90625,
+      "scale": 0.0044677734375,
+      "source_modules": [
+        "thinker.model.layers.2.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.2.self_attn.qkv_proj": {
+      "absmax": 4.71875,
+      "scale": 0.011059570312500001,
+      "source_modules": [
+        "thinker.model.layers.2.self_attn.k_proj",
+        "thinker.model.layers.2.self_attn.q_proj",
+        "thinker.model.layers.2.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.20.mlp.down_proj": {
+      "absmax": 302.0,
+      "scale": 0.7078125000000001,
+      "source_modules": [
+        "thinker.model.layers.20.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.20.mlp.gate_up_proj": {
+      "absmax": 34.25,
+      "scale": 0.0802734375,
+      "source_modules": [
+        "thinker.model.layers.20.mlp.gate_proj",
+        "thinker.model.layers.20.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.20.self_attn.o_proj": {
+      "absmax": 48.5,
+      "scale": 0.113671875,
+      "source_modules": [
+        "thinker.model.layers.20.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.20.self_attn.qkv_proj": {
+      "absmax": 238.0,
+      "scale": 0.5578125,
+      "source_modules": [
+        "thinker.model.layers.20.self_attn.k_proj",
+        "thinker.model.layers.20.self_attn.q_proj",
+        "thinker.model.layers.20.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.21.mlp.down_proj": {
+      "absmax": 370.0,
+      "scale": 0.8671875,
+      "source_modules": [
+        "thinker.model.layers.21.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.21.mlp.gate_up_proj": {
+      "absmax": 39.0,
+      "scale": 0.09140625000000001,
+      "source_modules": [
+        "thinker.model.layers.21.mlp.gate_proj",
+        "thinker.model.layers.21.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.21.self_attn.o_proj": {
+      "absmax": 56.5,
+      "scale": 0.132421875,
+      "source_modules": [
+        "thinker.model.layers.21.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.21.self_attn.qkv_proj": {
+      "absmax": 338.0,
+      "scale": 0.7921875,
+      "source_modules": [
+        "thinker.model.layers.21.self_attn.k_proj",
+        "thinker.model.layers.21.self_attn.q_proj",
+        "thinker.model.layers.21.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.22.mlp.down_proj": {
+      "absmax": 498.0,
+      "scale": 1.1671875,
+      "source_modules": [
+        "thinker.model.layers.22.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.22.mlp.gate_up_proj": {
+      "absmax": 42.5,
+      "scale": 0.099609375,
+      "source_modules": [
+        "thinker.model.layers.22.mlp.gate_proj",
+        "thinker.model.layers.22.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.22.self_attn.o_proj": {
+      "absmax": 48.75,
+      "scale": 0.1142578125,
+      "source_modules": [
+        "thinker.model.layers.22.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.22.self_attn.qkv_proj": {
+      "absmax": 416.0,
+      "scale": 0.975,
+      "source_modules": [
+        "thinker.model.layers.22.self_attn.k_proj",
+        "thinker.model.layers.22.self_attn.q_proj",
+        "thinker.model.layers.22.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.23.mlp.down_proj": {
+      "absmax": 458.0,
+      "scale": 1.0734375,
+      "source_modules": [
+        "thinker.model.layers.23.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.23.mlp.gate_up_proj": {
+      "absmax": 41.5,
+      "scale": 0.09726562500000001,
+      "source_modules": [
+        "thinker.model.layers.23.mlp.gate_proj",
+        "thinker.model.layers.23.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.23.self_attn.o_proj": {
+      "absmax": 103.5,
+      "scale": 0.24257812500000003,
+      "source_modules": [
+        "thinker.model.layers.23.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.23.self_attn.qkv_proj": {
+      "absmax": 556.0,
+      "scale": 1.303125,
+      "source_modules": [
+        "thinker.model.layers.23.self_attn.k_proj",
+        "thinker.model.layers.23.self_attn.q_proj",
+        "thinker.model.layers.23.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.24.mlp.down_proj": {
+      "absmax": 428.0,
+      "scale": 1.003125,
+      "source_modules": [
+        "thinker.model.layers.24.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.24.mlp.gate_up_proj": {
+      "absmax": 49.75,
+      "scale": 0.1166015625,
+      "source_modules": [
+        "thinker.model.layers.24.mlp.gate_proj",
+        "thinker.model.layers.24.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.24.self_attn.o_proj": {
+      "absmax": 83.5,
+      "scale": 0.195703125,
+      "source_modules": [
+        "thinker.model.layers.24.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.24.self_attn.qkv_proj": {
+      "absmax": 664.0,
+      "scale": 1.5562500000000001,
+      "source_modules": [
+        "thinker.model.layers.24.self_attn.k_proj",
+        "thinker.model.layers.24.self_attn.q_proj",
+        "thinker.model.layers.24.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.25.mlp.down_proj": {
+      "absmax": 608.0,
+      "scale": 1.425,
+      "source_modules": [
+        "thinker.model.layers.25.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.25.mlp.gate_up_proj": {
+      "absmax": 54.5,
+      "scale": 0.127734375,
+      "source_modules": [
+        "thinker.model.layers.25.mlp.gate_proj",
+        "thinker.model.layers.25.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.25.self_attn.o_proj": {
+      "absmax": 105.5,
+      "scale": 0.24726562500000002,
+      "source_modules": [
+        "thinker.model.layers.25.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.25.self_attn.qkv_proj": {
+      "absmax": 772.0,
+      "scale": 1.809375,
+      "source_modules": [
+        "thinker.model.layers.25.self_attn.k_proj",
+        "thinker.model.layers.25.self_attn.q_proj",
+        "thinker.model.layers.25.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.26.mlp.down_proj": {
+      "absmax": 668.0,
+      "scale": 1.565625,
+      "source_modules": [
+        "thinker.model.layers.26.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.26.mlp.gate_up_proj": {
+      "absmax": 74.5,
+      "scale": 0.174609375,
+      "source_modules": [
+        "thinker.model.layers.26.mlp.gate_proj",
+        "thinker.model.layers.26.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.26.self_attn.o_proj": {
+      "absmax": 112.5,
+      "scale": 0.263671875,
+      "source_modules": [
+        "thinker.model.layers.26.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.26.self_attn.qkv_proj": {
+      "absmax": 708.0,
+      "scale": 1.659375,
+      "source_modules": [
+        "thinker.model.layers.26.self_attn.k_proj",
+        "thinker.model.layers.26.self_attn.q_proj",
+        "thinker.model.layers.26.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.27.mlp.down_proj": {
+      "absmax": 2192.0,
+      "scale": 5.1375,
+      "source_modules": [
+        "thinker.model.layers.27.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.27.mlp.gate_up_proj": {
+      "absmax": 414.0,
+      "scale": 0.9703125000000001,
+      "source_modules": [
+        "thinker.model.layers.27.mlp.gate_proj",
+        "thinker.model.layers.27.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.27.self_attn.o_proj": {
+      "absmax": 158.0,
+      "scale": 0.3703125,
+      "source_modules": [
+        "thinker.model.layers.27.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.27.self_attn.qkv_proj": {
+      "absmax": 408.0,
+      "scale": 0.95625,
+      "source_modules": [
+        "thinker.model.layers.27.self_attn.k_proj",
+        "thinker.model.layers.27.self_attn.q_proj",
+        "thinker.model.layers.27.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.3.mlp.down_proj": {
+      "absmax": 23.875,
+      "scale": 0.055957031250000004,
+      "source_modules": [
+        "thinker.model.layers.3.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.3.mlp.gate_up_proj": {
+      "absmax": 33.5,
+      "scale": 0.078515625,
+      "source_modules": [
+        "thinker.model.layers.3.mlp.gate_proj",
+        "thinker.model.layers.3.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.3.self_attn.o_proj": {
+      "absmax": 2.65625,
+      "scale": 0.0062255859375,
+      "source_modules": [
+        "thinker.model.layers.3.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.3.self_attn.qkv_proj": {
+      "absmax": 11.9375,
+      "scale": 0.027978515625000002,
+      "source_modules": [
+        "thinker.model.layers.3.self_attn.k_proj",
+        "thinker.model.layers.3.self_attn.q_proj",
+        "thinker.model.layers.3.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.4.mlp.down_proj": {
+      "absmax": 29.5,
+      "scale": 0.069140625,
+      "source_modules": [
+        "thinker.model.layers.4.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.4.mlp.gate_up_proj": {
+      "absmax": 31.625,
+      "scale": 0.07412109375,
+      "source_modules": [
+        "thinker.model.layers.4.mlp.gate_proj",
+        "thinker.model.layers.4.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.4.self_attn.o_proj": {
+      "absmax": 3.671875,
+      "scale": 0.00860595703125,
+      "source_modules": [
+        "thinker.model.layers.4.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.4.self_attn.qkv_proj": {
+      "absmax": 12.625,
+      "scale": 0.029589843750000004,
+      "source_modules": [
+        "thinker.model.layers.4.self_attn.k_proj",
+        "thinker.model.layers.4.self_attn.q_proj",
+        "thinker.model.layers.4.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.5.mlp.down_proj": {
+      "absmax": 17.0,
+      "scale": 0.039843750000000004,
+      "source_modules": [
+        "thinker.model.layers.5.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.5.mlp.gate_up_proj": {
+      "absmax": 17.375,
+      "scale": 0.04072265625,
+      "source_modules": [
+        "thinker.model.layers.5.mlp.gate_proj",
+        "thinker.model.layers.5.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.5.self_attn.o_proj": {
+      "absmax": 3.515625,
+      "scale": 0.00823974609375,
+      "source_modules": [
+        "thinker.model.layers.5.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.5.self_attn.qkv_proj": {
+      "absmax": 17.625,
+      "scale": 0.041308593750000004,
+      "source_modules": [
+        "thinker.model.layers.5.self_attn.k_proj",
+        "thinker.model.layers.5.self_attn.q_proj",
+        "thinker.model.layers.5.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.6.mlp.down_proj": {
+      "absmax": 23.625,
+      "scale": 0.05537109375,
+      "source_modules": [
+        "thinker.model.layers.6.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.6.mlp.gate_up_proj": {
+      "absmax": 15.8125,
+      "scale": 0.037060546875,
+      "source_modules": [
+        "thinker.model.layers.6.mlp.gate_proj",
+        "thinker.model.layers.6.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.6.self_attn.o_proj": {
+      "absmax": 3.59375,
+      "scale": 0.0084228515625,
+      "source_modules": [
+        "thinker.model.layers.6.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.6.self_attn.qkv_proj": {
+      "absmax": 13.1875,
+      "scale": 0.030908203125000002,
+      "source_modules": [
+        "thinker.model.layers.6.self_attn.k_proj",
+        "thinker.model.layers.6.self_attn.q_proj",
+        "thinker.model.layers.6.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.7.mlp.down_proj": {
+      "absmax": 35.75,
+      "scale": 0.0837890625,
+      "source_modules": [
+        "thinker.model.layers.7.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.7.mlp.gate_up_proj": {
+      "absmax": 21.0,
+      "scale": 0.04921875,
+      "source_modules": [
+        "thinker.model.layers.7.mlp.gate_proj",
+        "thinker.model.layers.7.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.7.self_attn.o_proj": {
+      "absmax": 5.28125,
+      "scale": 0.0123779296875,
+      "source_modules": [
+        "thinker.model.layers.7.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.7.self_attn.qkv_proj": {
+      "absmax": 21.125,
+      "scale": 0.04951171875,
+      "source_modules": [
+        "thinker.model.layers.7.self_attn.k_proj",
+        "thinker.model.layers.7.self_attn.q_proj",
+        "thinker.model.layers.7.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.8.mlp.down_proj": {
+      "absmax": 25.0,
+      "scale": 0.05859375,
+      "source_modules": [
+        "thinker.model.layers.8.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.8.mlp.gate_up_proj": {
+      "absmax": 18.375,
+      "scale": 0.04306640625,
+      "source_modules": [
+        "thinker.model.layers.8.mlp.gate_proj",
+        "thinker.model.layers.8.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.8.self_attn.o_proj": {
+      "absmax": 8.375,
+      "scale": 0.01962890625,
+      "source_modules": [
+        "thinker.model.layers.8.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.8.self_attn.qkv_proj": {
+      "absmax": 20.375,
+      "scale": 0.04775390625,
+      "source_modules": [
+        "thinker.model.layers.8.self_attn.k_proj",
+        "thinker.model.layers.8.self_attn.q_proj",
+        "thinker.model.layers.8.self_attn.v_proj"
+      ]
+    },
+    "thinker.model.layers.9.mlp.down_proj": {
+      "absmax": 36.0,
+      "scale": 0.084375,
+      "source_modules": [
+        "thinker.model.layers.9.mlp.down_proj"
+      ]
+    },
+    "thinker.model.layers.9.mlp.gate_up_proj": {
+      "absmax": 16.75,
+      "scale": 0.0392578125,
+      "source_modules": [
+        "thinker.model.layers.9.mlp.gate_proj",
+        "thinker.model.layers.9.mlp.up_proj"
+      ]
+    },
+    "thinker.model.layers.9.self_attn.o_proj": {
+      "absmax": 7.4375,
+      "scale": 0.017431640625,
+      "source_modules": [
+        "thinker.model.layers.9.self_attn.o_proj"
+      ]
+    },
+    "thinker.model.layers.9.self_attn.qkv_proj": {
+      "absmax": 32.25,
+      "scale": 0.0755859375,
+      "source_modules": [
+        "thinker.model.layers.9.self_attn.k_proj",
+        "thinker.model.layers.9.self_attn.q_proj",
+        "thinker.model.layers.9.self_attn.v_proj"
+      ]
+    }
+  }
+}

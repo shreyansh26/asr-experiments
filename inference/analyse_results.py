@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
-PRECISIONS = ("bf16", "fp8")
+PRECISIONS = ("bf16", "fp8_dynamic", "fp8_static")
 FULL_COMPLETED_COUNT = 550
 PARTIAL_AUDIO_LENGTH = 50.0
 
@@ -53,8 +53,10 @@ def is_int(value: str, target: int) -> bool:
 
 def precision_for_row(row: dict[str, str]) -> str | None:
     output_root = row.get("output_root", "").lower()
-    if "fp8" in output_root:
-        return "fp8"
+    if "fp8_dynamic" in output_root:
+        return "fp8_dynamic"
+    if "fp8_static" in output_root:
+        return "fp8_static"
     if "bf16" in output_root:
         return "bf16"
     return None

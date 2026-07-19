@@ -532,6 +532,145 @@ does not imply unmeasured 4- or 8-worker static results. CER/WER is `n/a` for
 rows that were not recorded through the wrapper's full overwrite-and-score
 path. The 50-second runs are intentionally not scored by the wrapper.
 
+## Nsight Systems Profiling
+
+Nsight Systems must launch the vLLM server so that CUDA work from the engine
+process is visible. The client request then starts and stops collection through
+the named Nsight session. Run the workflow from the repository root in two
+terminals.
+
+The two supported modes answer different questions:
+
+| Mode | Nsight configuration | Use it for |
+| --- | --- | --- |
+| `node` | `--cuda-graph-trace=node` | Executed CUDA graph nodes, exact kernel order and names, node counts, and per-replay GPU timing |
+| `pytrace_graph` | `--cuda-graph-trace=graph --pytorch=functions-trace` | CUDA graph launches plus Python/PyTorch/NVTX ownership and CPU call-path context |
+
+Use `node` for kernel-level dynamic-versus-static FP8 comparisons. Use
+`pytrace_graph` to determine which Python or vLLM region initiated a graph
+launch. The server wrapper supplies the required Python `nvtx` package through
+`uv run --with nvtx`, so this does not modify the project dependencies.
+
+### Configure the server capture
+
+Edit these variables near the top of
+`inference/start_vllm_server_with_nsys.sh`:
+
+```bash
+SESSION_NAME=fp8static_c1
+REPORT_NAME=fp8static_c1_5s
+VLLM_SCRIPT=inference/run_vllm_fp8_static.sh
+```
+
+Common precision configurations are:
+
+| Precision | `SESSION_NAME` | `REPORT_NAME` | `VLLM_SCRIPT` |
+| --- | --- | --- | --- |
+| BF16 | `bf16_c1` | `bf16_c1_5s` | `inference/run_vllm.sh` |
+| Dynamic FP8 | `fp8dyn_c1` | `fp8dyn_c1_5s` | `inference/run_vllm_fp8_dynamic.sh` |
+| Static FP8 | `fp8static_c1` | `fp8static_c1_5s` | `inference/run_vllm_fp8_static.sh` |
+
+The wrapper appends the selected mode to both names. For example, the static
+configuration produces:
+
+```text
+node session:          fp8static_c1_node
+node report:           inference/results/nsys/fp8static_c1_5s_node
+pytrace_graph session: fp8static_c1_pytrace_graph
+pytrace_graph report:  inference/results/nsys/fp8static_c1_5s_pytrace_graph
+```
+
+### Configure the profiled request
+
+Edit the matching values near the top of `inference/run_nsys_profile.sh`:
+
+```bash
+SESSION=fp8static_c1_node
+REPORT=inference/results/nsys/fp8static_c1_5s_node
+AUDIO=data/prepared_data/carta_september_2024/call-156003_0.8311693678982316_4.230553711834489/channel_0.wav
+```
+
+`SESSION` must exactly equal `<SESSION_NAME>_<mode>` from the server wrapper.
+`REPORT` should equal
+`inference/results/nsys/<REPORT_NAME>_<mode>`. The server wrapper owns the
+actual Nsight output path; the request script keeps `REPORT` only to print the
+expected artifact at the end.
+
+The request script waits for `/v1/models`, runs three unprofiled warmups, starts
+collection, sends one streaming 5-second request, and stops collection.
+
+### Capture node-level CUDA graph activity
+
+For the static configuration above, use:
+
+```bash
+# Terminal 1: launch the server under an inactive Nsight session.
+bash inference/start_vllm_server_with_nsys.sh node
+```
+
+After the server starts, run in another terminal:
+
+```bash
+# Terminal 2: warm up, profile one request, and stop collection.
+bash inference/run_nsys_profile.sh
+```
+
+For dynamic FP8, first set the server variables to:
+
+```bash
+SESSION_NAME=fp8dyn_c1
+REPORT_NAME=fp8dyn_c1_5s
+VLLM_SCRIPT=inference/run_vllm_fp8_dynamic.sh
+```
+
+and set the request variables to:
+
+```bash
+SESSION=fp8dyn_c1_node
+REPORT=inference/results/nsys/fp8dyn_c1_5s_node
+```
+
+Then run the same two commands.
+
+### Capture Python/PyTorch ownership and graph launches
+
+Change the request script to the matching `pytrace_graph` session and report:
+
+```bash
+SESSION=fp8static_c1_pytrace_graph
+REPORT=inference/results/nsys/fp8static_c1_5s_pytrace_graph
+```
+
+Then run:
+
+```bash
+# Terminal 1.
+bash inference/start_vllm_server_with_nsys.sh pytrace_graph
+
+# Terminal 2, after the server is ready.
+bash inference/run_nsys_profile.sh
+```
+
+For dynamic FP8, use `fp8dyn_c1_pytrace_graph` and
+`fp8dyn_c1_5s_pytrace_graph` instead.
+
+Each capture writes both files because the server wrapper passes
+`--export=sqlite`:
+
+```text
+inference/results/nsys/<report-name>.nsys-rep
+inference/results/nsys/<report-name>.sqlite
+```
+
+If the vLLM process remains active after report generation, stop it with
+Ctrl-C in Terminal 1 before starting the next precision or trace mode. Do not
+run two servers on port `8090` at the same time.
+
+See the
+[Nsight Systems dynamic-versus-static FP8 guide](docs/nsys-fp8-dynamic-vs-static.md)
+for direct `nsys` commands, timing definitions, Events View filtering, SQLite
+queries, graph identification, and interpretation of the captured kernels.
+
 ## Error-Rate Evaluation
 
 Script:

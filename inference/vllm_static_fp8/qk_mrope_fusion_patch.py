@@ -7,7 +7,14 @@ from typing import Any
 import torch
 
 from vllm.logger import init_logger
+from vllm.model_executor.layers.attention.attention import get_attention_context
 from vllm.triton_utils import tl, triton
+from vllm.utils.torch_utils import (
+    LayerNameType,
+    _encode_layer_name,
+    _resolve_layer_name,
+    direct_register_custom_op,
+)
 
 
 logger = init_logger("vllm.qwen3_asr_qk_mrope")
@@ -17,14 +24,24 @@ logger = init_logger("vllm.qwen3_asr_qk_mrope")
 def _qk_norm_mrope_kernel(
     q_ptr,
     k_ptr,
+    v_ptr,
     q_out_ptr,
     k_out_ptr,
+    key_cache_ptr,
+    value_cache_ptr,
+    slot_mapping_ptr,
     positions_ptr,
     cache_ptr,
     q_weight_ptr,
     k_weight_ptr,
     q_token_stride: tl.constexpr,
     k_token_stride: tl.constexpr,
+    v_token_stride: tl.constexpr,
+    cache_block_stride: tl.constexpr,
+    cache_page_stride: tl.constexpr,
+    cache_head_stride: tl.constexpr,
+    cache_block_size: tl.constexpr,
+    num_cache_tokens,
     position_axis_stride,
     position_token_stride,
     cache_position_stride: tl.constexpr,
@@ -38,6 +55,7 @@ def _qk_norm_mrope_kernel(
     heads_per_program: tl.constexpr,
     groups_per_token: tl.constexpr,
     block_heads: tl.constexpr,
+    write_kv_cache: tl.constexpr,
 ):
     program = tl.program_id(0)
     token = program // groups_per_token
@@ -95,6 +113,29 @@ def _qk_norm_mrope_kernel(
     k_output = k_out_ptr + token * (num_kv_heads * head_dim) + local_head * head_dim + dims
     tl.store(tl.where(is_q, q_output, k_output), rotated, mask=valid_head)
 
+    if write_kv_cache:
+        slot = tl.load(
+            slot_mapping_ptr + token,
+            mask=token < num_cache_tokens,
+            other=-1,
+        ).to(tl.int64)
+        valid_cache = valid_head & ~is_q & (slot >= 0)
+        block = slot // cache_block_size
+        block_offset = slot % cache_block_size
+        cache_offset = (
+            block * cache_block_stride
+            + block_offset * cache_page_stride
+            + local_head * cache_head_stride
+            + dims
+        )
+        tl.store(key_cache_ptr + cache_offset, rotated, mask=valid_cache)
+        value = tl.load(
+            v_ptr + token * v_token_stride + local_head * head_dim + dims,
+            mask=valid_cache,
+            other=0.0,
+        )
+        tl.store(value_cache_ptr + cache_offset, value, mask=valid_cache)
+
 
 def fused_qk_norm_mrope(
     q: torch.Tensor,
@@ -126,14 +167,24 @@ def fused_qk_norm_mrope(
     _qk_norm_mrope_kernel[(q.shape[0] * groups_per_token,)](
         q,
         k,
+        q,
         q_out,
         k_out,
+        q,
+        q,
+        q,
         positions,
         cos_sin_cache,
         q_weight,
         k_weight,
         q.stride(0),
         k.stride(0),
+        q.stride(0),
+        1,
+        1,
+        1,
+        1,
+        0,
         positions.stride(0),
         positions.stride(1),
         cos_sin_cache.stride(0),
@@ -147,9 +198,129 @@ def fused_qk_norm_mrope(
         heads_per_program,
         groups_per_token,
         block_heads,
+        False,
         num_warps=num_warps,
     )
     return q_out, k_out
+
+
+def fused_qk_norm_mrope_kv_update_impl(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    value: torch.Tensor,
+    positions: torch.Tensor,
+    cos_sin_cache: torch.Tensor,
+    q_weight: torch.Tensor,
+    k_weight: torch.Tensor,
+    eps: float,
+    layer_name: LayerNameType,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Fuse Q/K preprocessing with the native-BF16 paged-cache scatter."""
+    layer_name = _resolve_layer_name(layer_name)
+    _, attn_layer, kv_cache, slot_mapping = get_attention_context(layer_name)
+
+    q_out = torch.empty((q.shape[0], q.shape[1]), device=q.device, dtype=q.dtype)
+    k_out = torch.empty((k.shape[0], k.shape[1]), device=k.device, dtype=k.dtype)
+    compatible_cache = False
+    if slot_mapping is not None and kv_cache.ndim >= 2:
+        key_cache, value_cache = kv_cache.unbind(1)
+        compatible_cache = (
+            key_cache.ndim == 4
+            and value_cache.ndim == 4
+            and key_cache.dtype == q.dtype
+            and value_cache.dtype == value.dtype
+            and key_cache.shape[-2:] == (8, 128)
+            and value_cache.shape[-2:] == (8, 128)
+        )
+
+    if not compatible_cache:
+        q_out, k_out = fused_qk_norm_mrope(
+            q,
+            k,
+            positions,
+            cos_sin_cache,
+            q_weight,
+            k_weight,
+            eps,
+            [24, 20, 20],
+        )
+        if slot_mapping is not None:
+            attn_layer.impl.do_kv_cache_update(
+                attn_layer,
+                k_out.view(-1, 8, 128),
+                value.view(-1, 8, 128),
+                kv_cache,
+                slot_mapping,
+            )
+    else:
+        heads_per_program = 16
+        groups_per_token = 2
+        _qk_norm_mrope_kernel[(q.shape[0] * groups_per_token,)](
+            q,
+            k,
+            value,
+            q_out,
+            k_out,
+            key_cache,
+            value_cache,
+            slot_mapping,
+            positions,
+            cos_sin_cache,
+            q_weight,
+            k_weight,
+            q.stride(0),
+            k.stride(0),
+            value.stride(0),
+            key_cache.stride(0),
+            key_cache.stride(1),
+            key_cache.stride(2),
+            key_cache.shape[1],
+            slot_mapping.shape[0],
+            positions.stride(0),
+            positions.stride(1),
+            cos_sin_cache.stride(0),
+            eps,
+            16,
+            8,
+            128,
+            64,
+            60,
+            60,
+            heads_per_program,
+            groups_per_token,
+            16,
+            True,
+            num_warps=4,
+        )
+
+    dummy = torch.empty(0, device=kv_cache.device, dtype=kv_cache.dtype)
+    return q_out, k_out, dummy
+
+
+def fused_qk_norm_mrope_kv_update_fake(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    value: torch.Tensor,
+    positions: torch.Tensor,
+    cos_sin_cache: torch.Tensor,
+    q_weight: torch.Tensor,
+    k_weight: torch.Tensor,
+    eps: float,
+    layer_name: LayerNameType,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    del value, positions, cos_sin_cache, q_weight, k_weight, eps, layer_name
+    return (
+        torch.empty_like(q),
+        torch.empty_like(k),
+        torch.empty(0, device=q.device, dtype=q.dtype),
+    )
+
+
+direct_register_custom_op(
+    op_name="asr_qk_norm_mrope_kv_update",
+    op_func=fused_qk_norm_mrope_kv_update_impl,
+    fake_impl=fused_qk_norm_mrope_kv_update_fake,
+)
 
 
 def install_qk_mrope_fusion_patch() -> None:
@@ -180,17 +351,32 @@ def install_qk_mrope_fusion_patch() -> None:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         cache = rotary._match_cos_sin_cache_dtype(q)
-        q, k = fused_qk_norm_mrope(
+        encoded_layer_name = _encode_layer_name(self.attn.layer_name)
+        q, k, kv_cache_dummy = torch.ops.vllm.asr_qk_norm_mrope_kv_update(
             q,
             k,
+            v,
             positions,
             cache,
             self.q_norm.weight,
             self.k_norm.weight,
             self.q_norm.variance_epsilon,
-            rotary.mrope_section,
+            encoded_layer_name,
         )
-        attn_output = self.attn(q, k, v)
+        output = torch.empty(
+            (q.shape[0], self.num_heads, self.head_dim),
+            dtype=q.dtype,
+            device=q.device,
+        )
+        torch.ops.vllm.unified_attention_with_output(
+            q.view(-1, self.num_heads, self.head_dim),
+            k.view(-1, self.num_kv_heads, self.head_dim),
+            v.view(-1, self.num_kv_heads, self.head_dim),
+            output,
+            encoded_layer_name,
+            kv_cache_dummy_dep=kv_cache_dummy,
+        )
+        attn_output = output.view(q.shape[0], -1)
         output, _ = self.o_proj(attn_output)
         return output
 

@@ -23,9 +23,10 @@ cd /mnt/ssd1/shreyansh/home_dir/asr_experiments
   explains the specialized Triton kernel, vLLM integration, exact RMS
   reduction order, prefill dispatch, correctness checks, profiling evidence,
   and current benchmark results.
-- [Nsight Systems dynamic-versus-static FP8 guide](docs/nsys-fp8-dynamic-vs-static.md)
+- [Nsight Systems FP8 optimization guide](docs/nsys-fp8-optimization-guide.md)
   covers capture commands, report interpretation, CUDA-graph timing, exact
-  node-level differences, screenshots, and row-by-row decoder pseudocode.
+  node-level differences, screenshots, and row-by-row decoder pseudocode for
+  dynamic FP8, static FP8, and the fused Q/K-MRoPE-cache path.
 - [FlashAttention forward combine in Nsight Systems](docs/flashattention-forward-combine.md)
   explains the split-KV decode path, stable softmax recombination, and how to
   interpret `FlashAttnFwdCombine` in the node trace.
@@ -709,7 +710,7 @@ Ctrl-C in Terminal 1 before starting the next precision or trace mode. Do not
 run two servers on port `8090` at the same time.
 
 See the
-[Nsight Systems dynamic-versus-static FP8 guide](docs/nsys-fp8-dynamic-vs-static.md)
+[Nsight Systems FP8 optimization guide](docs/nsys-fp8-optimization-guide.md)
 for direct `nsys` commands, timing definitions, Events View filtering, SQLite
 queries, graph identification, and interpretation of the captured kernels.
 

@@ -1,37 +1,65 @@
-# ASR Experiments
+# Qwen3-ASR Inference Experiments
 
-Utilities for preparing ASR audio/text pairs, running Qwen ASR through a vLLM
-OpenAI-compatible server, and scoring prediction files against prepared ground
-truth. The serving and benchmark workflow supports BF16, dynamic FP8, and
-calibrated static-activation FP8.
+This repository is an end-to-end performance and quality harness for serving
+`Qwen/Qwen3-ASR-1.7B` with vLLM. It prepares matched audio/transcript data,
+runs sequential and concurrent inference, measures latency, time to first token
+(TTFT), and throughput, evaluates CER/WER, and captures Nsight Systems traces
+for kernel-level optimization work.
 
-Run commands below from the repository root:
+The supported precision paths are BF16, vLLM dynamic FP8, calibrated
+static-activation FP8, and an optimized static-FP8 path with a custom Triton
+fusion for Q/K RMSNorm, MRoPE, and paged KV-cache writes.
+
+> **Current optimized path:**
+> `bash inference/run_vllm_fp8_static_qk_prefill.sh`
+>
+> On the latest full 16-worker benchmark, the fused path improves throughput
+> and latency over static FP8 with a small measured CER/WER movement. The
+> clipped-audio run improves throughput and median latency
+> but regresses tail latency and TTFT. See [Current results](#current-results)
+> for the complete numbers and comparison boundaries.
+
+All commands below assume the repository root:
 
 ```bash
 cd /mnt/ssd1/shreyansh/home_dir/asr_experiments
 ```
 
-## Technical Documentation
+## Contents
 
-- [Static FP8 activation calibration](docs/fp8-calibration.md) explains sample
-  selection, batched collection, global per-layer absmax aggregation, scale
-  calculation, and the portable JSON artifact.
-- [Out-of-tree vLLM static-FP8 extension](docs/vllm-static-fp8-extension.md)
-  explains Python/vLLM registration, layer-name mapping, scale injection,
-  runtime behavior, coverage diagnostics, and upgrade boundaries.
-- [Static-FP8 Q/K MRoPE and KV-cache fusion](docs/qk-mrope-kv-cache-fusion.md)
-  explains the specialized Triton kernel, vLLM integration, exact RMS
-  reduction order, prefill dispatch, correctness checks, profiling evidence,
-  and current benchmark results.
-- [Nsight Systems FP8 optimization guide](docs/nsys-fp8-optimization-guide.md)
-  covers capture commands, report interpretation, CUDA-graph timing, exact
-  node-level differences, screenshots, and row-by-row decoder pseudocode for
-  dynamic FP8, static FP8, and the fused Q/K-MRoPE-cache path.
-- [FlashAttention forward combine in Nsight Systems](docs/flashattention-forward-combine.md)
-  explains the split-KV decode path, stable softmax recombination, and how to
-  interpret `FlashAttnFwdCombine` in the node trace.
+- [How the workflow fits together](#how-the-workflow-fits-together)
+- [Quick start](#quick-start)
+- [Data and artifact layout](#data-and-artifact-layout)
+- [Prepare data](#prepare-data)
+- [Direct inference](#direct-inference)
+  - [Sequential inference](#sequential-inference)
+  - [Concurrent inference](#concurrent-inference)
+- [Benchmark and compare configurations](#benchmark-and-compare-configurations)
+  - [Precision comparison workflow](#precision-comparison-workflow)
+  - [Current results](#current-results)
+- [Profile with Nsight Systems](#profile-with-nsight-systems)
+- [Evaluate CER and WER](#evaluate-cer-and-wer)
+- [End-to-end recipes](#end-to-end-recipes)
+- [Technical documentation](#technical-documentation)
 
-## Setup
+## How the workflow fits together
+
+```text
+manifest + source audio
+          |
+          v
+  data/prepared_data  -->  vLLM server  -->  prediction tree
+                                 |                 |
+                                 v                 v
+                         latency / TTFT /       CER / WER
+                           throughput
+```
+
+The prepared reference tree and each prediction tree share the same relative
+paths. This lets the evaluator match transcripts without a separate index and
+allows failed or partial inference runs to be scored safely.
+
+## Quick start
 
 Install the pinned environment with `uv`:
 
@@ -39,7 +67,35 @@ Install the pinned environment with `uv`:
 uv sync
 ```
 
-The inference scripts expect a vLLM OpenAI-compatible server by default at:
+Start one vLLM server in the first terminal. The optimized static-FP8 launcher
+is the recommended starting point:
+
+```bash
+bash inference/run_vllm_fp8_static_qk_prefill.sh
+```
+
+In a second terminal, run the two standard batched benchmarks and print the
+aggregate comparison table:
+
+```bash
+# Controlled 100-file workload with 50-second clips.
+uv run inference/run_benchmark.py \
+  --mode batched \
+  --workers 16 \
+  --overwrite \
+  --uniform-audio-length 50 \
+  --num-files 100
+
+# Full workload; also computes aggregate CER/WER.
+uv run inference/run_benchmark.py \
+  --mode batched \
+  --workers 16 \
+  --overwrite
+
+uv run inference/analyse_results.py --mode batched
+```
+
+The inference scripts expect the OpenAI-compatible server at:
 
 ```text
 http://localhost:8090/v1
@@ -86,7 +142,11 @@ SCALES_JSON=inference/results/fp8_static_scales_custom.json \
 
 If the server runs elsewhere, pass `--base-url`.
 
-## Data Layout
+For a controlled precision comparison, start exactly one server at a time and
+give every configuration its own output root. The complete four-run matrix is
+documented under [Precision comparison workflow](#precision-comparison-workflow).
+
+## Data and artifact layout
 
 Default input and output locations:
 
@@ -111,9 +171,9 @@ data/prepared_data/<dataset>/<sample>/channel_0.txt
 predictions/results/batched_predicted/<dataset>/<sample>/channel_0.txt
 ```
 
-## Prepare Data
+## Prepare data
 
-Script:
+Entry point:
 
 ```bash
 uv run python data/read_data.py
@@ -137,9 +197,16 @@ Supported placement modes in code:
 - `hardlink`: hardlink source audio files.
 - `auto`: try hardlink first, then symlink.
 
-## Single-File / Sequential Inference
+## Direct inference
 
-Script:
+The low-level runners are useful for smoke tests, debugging, and custom jobs.
+For comparable experiment records, prefer the
+[benchmark wrapper](#benchmark-and-compare-configurations), which invokes these
+runners and writes their metrics to CSV.
+
+### Sequential inference
+
+Entry point:
 
 ```bash
 uv run python inference/run_infer.py <audio_path>
@@ -210,9 +277,9 @@ Default behavior:
 - Final output reports completed/failed counts, throughput, audio throughput,
   avg/p50/p95/p99 latency, and avg/p50/p95/p99 TTFT (`n/a` for non-streaming).
 
-## Batch Inference / Load Test
+### Concurrent inference
 
-Script:
+Entry point:
 
 ```bash
 uv run python inference/run_infer_batched.py
@@ -268,7 +335,7 @@ uv run python inference/run_infer_batched.py \
   --overwrite
 ```
 
-### Clipped-Audio Mode
+#### Clipped-audio mode
 
 Use `--uniform-audio-length <seconds>` to send only the first fixed-length clip
 from each audio file. Files shorter than or equal to the clip length are skipped.
@@ -331,9 +398,13 @@ uv run python inference/run_infer_batched.py \
   --overwrite
 ```
 
-## Benchmark Wrapper
+## Benchmark and compare configurations
 
-Script:
+`run_benchmark.py` is the canonical experiment entry point. It keeps warmup,
+request execution, metric parsing, result recording, and full-run quality
+evaluation consistent across server configurations.
+
+Commands:
 
 ```bash
 uv run python inference/run_benchmark.py --mode sequential
@@ -497,7 +568,7 @@ uv run python inference/analyse_results.py --mode sequential
 uv run python inference/analyse_results.py --mode batched
 ```
 
-### Current benchmark results
+### Current results
 
 These tables are the current workspace snapshot from
 `inference/results/sequential.csv` and `inference/results/batched.csv`. Latency
@@ -574,7 +645,7 @@ movement as either deterministic drift or run-to-run variation. The clipped
 batched snapshot is also not a uniform win: throughput and p50 latency improve,
 but p95/p99 latency and TTFT regress.
 
-## Nsight Systems Profiling
+## Profile with Nsight Systems
 
 Nsight Systems must launch the vLLM server so that CUDA work from the engine
 process is visible. The client request then starts and stops collection through
@@ -714,9 +785,9 @@ See the
 for direct `nsys` commands, timing definitions, Events View filtering, SQLite
 queries, graph identification, and interpretation of the captured kernels.
 
-## Error-Rate Evaluation
+## Evaluate CER and WER
 
-Script:
+Entry point:
 
 ```bash
 uv run python eval/compute_error_rates.py <prediction_root>
@@ -767,7 +838,7 @@ Summary output includes:
 - aggregate CER with `char_edits/ref_chars`;
 - aggregate WER with `word_edits/ref_words`.
 
-## Typical Workflows
+## End-to-end recipes
 
 Prepare data, run inference, score predictions:
 
@@ -795,3 +866,27 @@ uv run python inference/run_infer_batched.py \
 
 uv run python eval/compute_error_rates.py predictions/results/batched_predicted_uniform_audio_length_10s
 ```
+
+## Technical documentation
+
+The README is the operational entry point. These focused guides contain the
+implementation details, profiling evidence, and upgrade boundaries behind the
+optimized paths:
+
+- [Static FP8 activation calibration](docs/fp8-calibration.md) explains sample
+  selection, batched collection, global per-layer absmax aggregation, scale
+  calculation, and the portable JSON artifact.
+- [Out-of-tree vLLM static-FP8 extension](docs/vllm-static-fp8-extension.md)
+  explains Python/vLLM registration, layer-name mapping, scale injection,
+  runtime behavior, coverage diagnostics, and upgrade boundaries.
+- [Static-FP8 Q/K MRoPE and KV-cache fusion](docs/qk-mrope-kv-cache-fusion.md)
+  explains the specialized Triton kernel, vLLM integration, exact RMS
+  reduction order, prefill dispatch, correctness checks, profiling evidence,
+  and current benchmark results.
+- [Nsight Systems FP8 optimization guide](docs/nsys-fp8-optimization-guide.md)
+  covers capture commands, report interpretation, CUDA-graph timing, exact
+  node-level differences, screenshots, and row-by-row decoder pseudocode for
+  dynamic FP8, static FP8, and the fused Q/K-MRoPE-cache path.
+- [FlashAttention forward combine in Nsight Systems](docs/flashattention-forward-combine.md)
+  explains the split-KV decode path, stable softmax recombination, and how to
+  interpret `FlashAttnFwdCombine` in the node trace.

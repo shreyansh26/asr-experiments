@@ -7,16 +7,17 @@ runs sequential and concurrent inference, measures latency, time to first token
 for kernel-level optimization work.
 
 The supported precision paths are BF16, vLLM dynamic FP8, calibrated
-static-activation FP8, and an optimized static-FP8 path with a custom Triton
-fusion for Q/K RMSNorm, MRoPE, and paged KV-cache writes.
+static-activation FP8, and an optimized static-FP8 path with custom Triton
+kernels for Q/K RMSNorm, MRoPE, paged KV-cache writes, and exact audio-row
+packing driven by CPU metadata.
 
 > **Current optimized path:**
-> `bash inference/run_vllm_fp8_static_qk_prefill.sh`
+> `bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh`
 >
-> On the latest full 16-worker benchmark, the fused path improves throughput
-> and latency over static FP8 with a small measured CER/WER movement. The
-> clipped-audio run improves throughput and median latency
-> but regresses tail latency and TTFT. See [Current results](#current-results)
+> Against a fresh full main-branch control, this path improved throughput by
+> 5.91% and average latency by 5.65%, with slightly better CER/WER. Average
+> TTFT regressed by 12.87%, so it is promoted specifically for the
+> latency-prioritized batched track. See [Current results](#current-results)
 > for the complete numbers and comparison boundaries.
 
 All commands below assume the repository root:
@@ -67,11 +68,11 @@ Install the pinned environment with `uv`:
 uv sync
 ```
 
-Start one vLLM server in the first terminal. The optimized static-FP8 launcher
-is the recommended starting point:
+Start one vLLM server in the first terminal. The latency-optimized batched
+static-FP8 launcher is the recommended starting point:
 
 ```bash
-bash inference/run_vllm_fp8_static_qk_prefill.sh
+bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh
 ```
 
 In a second terminal, run the two standard batched benchmarks and print the
@@ -79,18 +80,24 @@ aggregate comparison table:
 
 ```bash
 # Controlled 100-file workload with 50-second clips.
+curl -fsS -X POST http://localhost:8090/reset_mm_cache
+curl -fsS -X POST http://localhost:8090/reset_encoder_cache
 uv run inference/run_benchmark.py \
   --mode batched \
   --workers 16 \
   --overwrite \
   --uniform-audio-length 50 \
-  --num-files 100
+  --num-files 100 \
+  --output-root predictions/results_fp8_static_qk_audio_cpu_metadata_pack/batched_predicted_uniform_audio_length_50s
 
 # Full workload; also computes aggregate CER/WER.
+curl -fsS -X POST http://localhost:8090/reset_mm_cache
+curl -fsS -X POST http://localhost:8090/reset_encoder_cache
 uv run inference/run_benchmark.py \
   --mode batched \
   --workers 16 \
-  --overwrite
+  --overwrite \
+  --output-root predictions/results_fp8_static_qk_audio_cpu_metadata_pack/batched_predicted
 
 uv run inference/analyse_results.py --mode batched
 ```
@@ -115,11 +122,16 @@ bash inference/run_vllm_fp8_static.sh
 
 # Static FP8 plus fused Q/K RMSNorm, MRoPE, and KV-cache update.
 bash inference/run_vllm_fp8_static_qk_prefill.sh
+
+# The fused decoder path plus CPU audio metadata and exact Triton row packing.
+bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh
 ```
 
 The inference and benchmark scripts reset vLLM prefix cache before each run with
 `POST /reset_prefix_cache`. All launchers enable the vLLM development API
-endpoints needed for that reset.
+endpoints needed for that reset. For uncached A/B work, also reset the
+multimodal and encoder caches explicitly, as shown in the quick-start commands;
+the benchmark runner does not issue those two resets itself.
 
 The static-FP8 launcher defaults to
 `inference/results/fp8_static_scales_128x50.json`. Generate it with:
@@ -521,14 +533,15 @@ the next precision:
 | `fp8_dynamic` | `bash inference/run_vllm_fp8_dynamic.sh` |
 | `fp8_static` | `bash inference/run_vllm_fp8_static.sh` |
 | `fp8_static_qk_prefill` | `bash inference/run_vllm_fp8_static_qk_prefill.sh` |
+| `fp8_static_qk_audio_cpu_metadata` | `bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh` |
 
 Use precision-specific output roots. This keeps prediction files isolated and
 allows `analyse_results.py` to infer the precision from the recorded path:
 
 ```bash
-# Set this to bf16, fp8_dynamic, fp8_static, or fp8_static_qk_prefill for the
-# matching running server.
-PRECISION=fp8_static
+# Set this to bf16, fp8_dynamic, fp8_static, fp8_static_qk_prefill, or
+# fp8_static_qk_audio_cpu_metadata for the matching running server.
+PRECISION=fp8_static_qk_audio_cpu_metadata
 
 # Full sequential benchmark; --overwrite also enables aggregate CER/WER scoring.
 uv run python inference/run_benchmark.py \
@@ -581,6 +594,13 @@ prefill-specific head grouping. See
 [the technical design](docs/qk-mrope-kv-cache-fusion.md) for the execution flow,
 specialization boundaries, and Nsight evidence.
 
+`FP8 static + Q/K + CPU metadata` layers two exact audio-encoder changes on
+that decoder path. A cached CPU max-seqlen removes 24 scalar CUDA readbacks per
+audio pass. CPU length/attention metadata plus one Triton valid-row copy removes
+the other seven measured steady-state stream synchronizations. See
+[the round-three result](ideas/audio_cpu_metadata_pack.md) for guards, helper
+correctness, repeated A/B measurements, and the full quality gate.
+
 Against the current static-FP8 rows, the full 16-worker batched snapshot gains
 5.8% throughput, improves latency percentiles by 6.0-8.1%, and improves TTFT
 percentiles by 9.2-11.2%. The full sequential snapshot gains 5.0% throughput
@@ -618,6 +638,7 @@ Batched, full benchmark with 550 measured files:
 | FP8 dynamic | 16 | 3.563 | 7.166 | 9.903 | 0.343 | 1.121 | 1.838 | 4.104 | 0.158 | 0.380 |
 | FP8 static | 16 | 3.346 | 6.675 | 9.124 | 0.426 | 1.177 | 1.984 | 4.352 | 0.162 | 0.384 |
 | FP8 static + Q/K fusion | 16 | 3.137 | 6.276 | 8.382 | 0.385 | 1.069 | 1.761 | 4.604 | 0.166 | 0.387 |
+| FP8 static + Q/K + CPU metadata | 16 | **3.095** | **6.012** | 8.459 | 0.426 | 1.238 | 2.188 | **4.750** | 0.164 | 0.385 |
 
 Batched, 16 workers and 100 measured files with a 50-second audio limit:
 
@@ -631,19 +652,31 @@ Batched, 16 workers and 100 measured files with a 50-second audio limit:
 | FP8 dynamic | 16 | 0.735 | 1.279 | 1.481 | 0.154 | 0.432 | 0.499 | 20.731 |
 | FP8 static | 16 | 0.652 | 1.098 | 1.212 | 0.119 | 0.306 | 0.332 | 22.171 |
 | FP8 static + Q/K fusion | 16 | 0.636 | 1.226 | 1.424 | 0.122 | 0.499 | 0.614 | 22.635 |
+| FP8 static + Q/K + CPU metadata | 16 | 0.653 | 1.112 | 1.226 | 0.195 | 0.468 | 0.569 | 22.308 |
+
+The CPU-metadata row is backed by more than the single snapshots rendered in
+the percentile tables. Six 100-file candidate runs averaged 22.1708 files/s,
+0.6743 s latency, and 0.1928 s TTFT. A time-adjacent three-run CPU-max control
+averaged 21.186 files/s, 0.7080 s latency, and 0.1987 s TTFT. The full candidate
+completed all 550 measured files at 4.750 files/s, 3.304 s average latency,
+0.535 s average TTFT, 0.163614 CER, and 0.384638 WER. Against a fresh full main
+control at 4.485 files/s, 3.502 s latency, 0.474 s TTFT, 0.163900 CER, and
+0.385612 WER, that is +5.91% throughput, -5.65% latency, and +12.87% TTFT,
+with no quality degradation.
 
 Static FP8 currently has batched comparison rows only at 16 workers; the table
 does not imply unmeasured 4- or 8-worker static results. CER/WER is `n/a` for
 rows that were not recorded through the wrapper's full overwrite-and-score
 path. The 50-second runs are intentionally not scored by the wrapper.
 
-The unrounded full sequential quality change from static FP8 to the fused path
-is CER `0.162277 -> 0.162677` and WER `0.384183 -> 0.384538`. The latest full
-batched change is larger: CER `0.161949 -> 0.166400` and WER
-`0.384468 -> 0.386682`. A paired rerun is needed before treating that batched
-movement as either deterministic drift or run-to-run variation. The clipped
-batched snapshot is also not a uniform win: throughput and p50 latency improve,
-but p95/p99 latency and TTFT regress.
+The older unrounded full sequential quality change from static FP8 to the fused
+decoder path is CER `0.162277 -> 0.162677` and WER
+`0.384183 -> 0.384538`. Its older full batched snapshot moved CER
+`0.161949 -> 0.166400` and WER `0.384468 -> 0.386682`; those rows were not an
+interleaved comparison. The promoted CPU-metadata change has a fresher direct
+control: main was CER/WER `0.163900/0.385612`, while the candidate was
+`0.163614/0.384638`. Both are slightly better, and the low-level row pack is
+bit-exact, so there is no observed quality regression from this new path.
 
 ## Profile with Nsight Systems
 
@@ -883,6 +916,13 @@ optimized paths:
   explains the specialized Triton kernel, vLLM integration, exact RMS
   reduction order, prefill dispatch, correctness checks, profiling evidence,
   and current benchmark results.
+- [CPU audio metadata and exact valid-row packing](ideas/audio_cpu_metadata_pack.md)
+  explains the synchronization audit, strict installed-source/runtime guards,
+  exact Triton row-copy helper, repeated B16 service A/B, full CER/WER gate,
+  and the TTFT tradeoff of the current latency-optimized path.
+- [Batched kernel optimization round 3](ideas/batched_kernel_optimization_round_3.md)
+  records the fresh baseline, true-B16 Nsight breakdown, accepted and rejected
+  branches, benchmark discipline, and remaining kernel opportunities.
 - [Nsight Systems FP8 optimization guide](docs/nsys-fp8-optimization-guide.md)
   covers capture commands, report interpretation, CUDA-graph timing, exact
   node-level differences, screenshots, and row-by-row decoder pseudocode for

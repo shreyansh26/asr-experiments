@@ -4,9 +4,9 @@ set -euo pipefail
 cd /mnt/ssd1/shreyansh/home_dir/asr_experiments
 mkdir -p inference/results/nsys
 
-SESSION_NAME=fp8static_c1
-REPORT_NAME=fp8static_c1_5s
-VLLM_SCRIPT=inference/run_vllm_fp8_static.sh
+SESSION_NAME=fp8static_qk_kvcache_fuse_c1
+REPORT_NAME=fp8static_qk_kvcache_fuse_c1_5s
+VLLM_SCRIPT=inference/run_vllm_fp8_static_qk_prefill.sh
 
 if [[ $# -ne 1 ]]; then
   echo "Usage: $0 {node|pytrace_graph}" >&2

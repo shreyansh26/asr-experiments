@@ -2,3 +2,4 @@ __pycache__
 data/*
 !data/read_data.py
 AGENTS.md
+ideas/

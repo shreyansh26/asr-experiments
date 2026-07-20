@@ -1,4 +1,4 @@
-# Qwen3-ASR Inference Experiments
+# Optimizing Qwen3-ASR Inference
 
 This repository is an end-to-end performance and quality harness for serving
 `Qwen/Qwen3-ASR-1.7B` with vLLM. It prepares matched audio/transcript data,

@@ -11,6 +11,7 @@ from typing import Any
 
 import torch
 
+from audio_cpu_maxseqlen_patch import install_audio_cpu_maxseqlen_patch
 from qk_mrope_fusion_patch import install_qk_mrope_fusion_patch
 
 from vllm.logger import init_logger
@@ -36,6 +37,8 @@ logger = init_logger("vllm.static_fp8_json")
 
 if os.environ.get("ASR_QK_MROPE_FUSION", "0") == "1":
     install_qk_mrope_fusion_patch()
+if os.environ.get("ASR_AUDIO_CPU_MAXSEQLEN", "0") == "1":
+    install_audio_cpu_maxseqlen_patch()
 
 SCALES_ENV = "ASR_FP8_STATIC_SCALES_JSON"
 EXPECTED_FORMAT = "qwen3_asr_fp8_static_activation_scales"

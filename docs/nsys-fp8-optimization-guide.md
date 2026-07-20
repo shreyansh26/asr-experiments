@@ -23,8 +23,8 @@ Related documents:
 
 ## Executive summary
 
-The central result is not that static FP8 changes the model. Both captures run
-the same 28-layer Qwen3 decoder, with the same:
+The central result is not that either optimization changes the model. All
+three captures run the same 28-layer Qwen3 decoder, with the same:
 
 - 112 CUTLASS FP8 GEMMs per dominant CUDA-graph replay;
 - 28 FlashAttention forward kernels;
@@ -51,15 +51,41 @@ Static FP8:
     -> CUTLASS FP8 GEMM
 ```
 
-In the dominant decode graph this produces:
+Using the current matched node-trace artifacts, the dominant decode graph
+changes as follows:
 
-| Metric per graph replay | Dynamic FP8 | Static FP8 | Change |
-| --- | ---: | ---: | ---: |
-| Executed kernel nodes | 393 | 366 | -27 (-6.9%) |
-| First-node to last-node envelope | 1.950 ms | 1.649 ms | -0.301 ms (-15.4%) |
-| Sum of kernel durations | 1.786 ms | 1.627 ms | -0.159 ms (-8.9%) |
-| Explicit `_abs_..._max_` kernels | 84 | 0 | runtime absmax removed |
-| `triton_red_fused_1` occurrences | 28 | 1 | 27 fewer nodes |
+| Metric per graph replay | Dynamic FP8 | Static FP8 | Fused static FP8 | Static vs dynamic | Fused vs static |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Executed kernel nodes | 393 | 366 | 309 | -27 (-6.9%) | -57 (-15.6%) |
+| First-node to last-node envelope | 1.950 ms | 1.649 ms | 1.613 ms | -0.301 ms (-15.4%) | -0.036 ms (-2.2%) |
+| Sum of kernel durations | 1.786 ms | 1.627 ms | 1.486 ms | -0.159 ms (-8.9%) | -0.141 ms (-8.6%) |
+| Explicit `_abs_..._max_` kernels | 84 | 0 | 0 | runtime absmax removed | no further change |
+
+The per-replay kernel makeup shows which work changes and which work remains:
+
+| Kernel family per graph replay | Dynamic FP8 | Static FP8 | Fused static FP8 | Interpretation |
+| --- | ---: | ---: | ---: | --- |
+| CUTLASS FP8 GEMMs | 112 | 112 | 112 | model linear work is unchanged |
+| `FlashAttnFwdSm90` | 28 | 28 | 28 | attention main-kernel count is unchanged |
+| `FlashAttnFwdCombine` | 28 | 28 | 28 | split-KV combine count is unchanged |
+| Separate `reshape_and_cache_flash_kernel` | 28 | 28 | 0 | cache scatter moves into the fused kernel |
+| `_qk_norm_mrope_kernel` | 0 | 0 | 28 | one fused call per decoder layer |
+| Q/K RMSNorm + MRoPE + cache-setup nodes | 84 | 84 | 28 | three nodes per layer become one |
+
+Relative to dynamic FP8, applying both optimizations removes 84 of 393 graph
+nodes (21.4%), shortens the average replay envelope by 0.337 ms (17.3%), and
+removes 0.300 ms of summed kernel work (16.8%). The two stages contribute in
+different regions:
+
+```text
+Dynamic FP8 -> static FP8:
+    393 -> 366 nodes
+    removes runtime activation absmax work
+
+Static FP8 -> fused static FP8:
+    366 -> 309 nodes
+    fuses Q/K RMSNorm + MRoPE + paged KV-cache scatter
+```
 
 The 84 dynamic scale-bearing kernels do not all disappear as graph nodes.
 Most also perform required work such as RMSNorm, residual addition, SiLU, or
@@ -82,7 +108,10 @@ Fused static:
 
 The attention and FP8 GEMM counts remain unchanged. The fused kernel produces
 rotated Q/K, writes rotated K and the original projected V into the paged KV
-cache, and establishes the dependency consumed by attention.
+cache, and establishes the dependency consumed by attention. Across 28 layers,
+the direct three-to-one replacement removes 56 nodes. The remaining one-node
+reduction comes from the compiler combining graph-entry input preparation and
+layer-0 RMSNorm/static quantization in this fused capture.
 
 ## Trace screenshots
 

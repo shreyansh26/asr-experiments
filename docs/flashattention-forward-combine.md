@@ -4,9 +4,8 @@ This note explains the `FlashAttnFwdCombine` kernel that follows
 `FlashAttnFwdSm90` in the Qwen3-ASR Nsight Systems node traces. It is a normal
 part of FlashAttention's split-KV decoding path, not an FP8 scaling kernel.
 
-For the complete dynamic-versus-static FP8 profiling workflow and decoder
-kernel order, see the
-[Nsight Systems dynamic-versus-static FP8 guide](nsys-fp8-dynamic-vs-static.md).
+For the complete FP8 profiling workflow and decoder kernel orders, see the
+[Nsight Systems FP8 optimization guide](nsys-fp8-optimization-guide.md).
 
 ## What the two kernels represent
 
@@ -171,4 +170,3 @@ separate combine kernel is unnecessary and may not appear.
 
 - [FlashAttention repository](https://github.com/Dao-AILab/flash-attention)
 - [FlashAttention Python interface and `flash_attn_with_kvcache`](https://github.com/Dao-AILab/flash-attention/blob/main/hopper/flash_attn_interface.py)
-

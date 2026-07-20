@@ -1,10 +1,11 @@
-# Nsight Systems guide: dynamic versus static FP8 in Qwen3-ASR
+# Nsight Systems guide: FP8 optimizations in Qwen3-ASR
 
 This document is the durable reference for the Nsight Systems investigation of
-Qwen3-ASR decoding with vLLM dynamic FP8 and calibrated static-activation FP8.
-It records the capture workflow, the meaning of the two trace modes, correct
-timing methodology, how the dominant CUDA graph was identified, the measured
-differences, and the row-by-row decoder pseudocode represented by the kernel
+Qwen3-ASR decoding with vLLM dynamic FP8, calibrated static-activation FP8, and
+the static-FP8 path with fused Q/K RMSNorm, MRoPE, and KV-cache update. It
+records the capture workflow, the meaning of the two trace modes, correct timing
+methodology, how the dominant CUDA graph was identified, the measured
+differences, and the row-by-row decoder pseudocode represented by each kernel
 order.
 
 Related documents:
@@ -16,6 +17,9 @@ Related documents:
 - [FlashAttention forward combine in Nsight Systems](flashattention-forward-combine.md)
   explains the split-KV path behind the `FlashAttnFwdSm90` and
   `FlashAttnFwdCombine` pair visible in each decoder layer.
+- [Fused Q/K RMSNorm, MRoPE, and KV-cache update](qk-mrope-kv-cache-fusion.md)
+  documents the implementation, dispatch constraints, correctness checks, and
+  benchmark results for the fused kernel analyzed here.
 
 ## Executive summary
 
@@ -25,7 +29,7 @@ the same 28-layer Qwen3 decoder, with the same:
 - 112 CUTLASS FP8 GEMMs per dominant CUDA-graph replay;
 - 28 FlashAttention forward kernels;
 - 28 FlashAttention combine kernels;
-- 28 KV-cache writes;
+- 28 logical KV-cache writes;
 - 20 replays of the dominant decode graph in the captured request.
 
 Static FP8 changes how the input activation scale for each FP8 linear is
@@ -64,6 +68,22 @@ runtime `abs`/`max` scale calculation. The graph loses 27 nodes because those
 particular dynamic reductions were standalone and the fixed-scale conversion
 can be fused into the adjacent pointwise kernel.
 
+The later Q/K-MRoPE-cache optimization changes a different part of the layer.
+It replaces three static-path nodes per decoder layer with one custom kernel:
+
+```text
+Unfused static:
+    Q/K per-head RMSNorm + MRoPE   (two Triton nodes)
+    -> reshape_and_cache_flash     (one vLLM CUDA node)
+
+Fused static:
+    _qk_norm_mrope_kernel          (one Triton node)
+```
+
+The attention and FP8 GEMM counts remain unchanged. The fused kernel produces
+rotated Q/K, writes rotated K and the original projected V into the paged KV
+cache, and establishes the dependency consumed by attention.
+
 ## Trace screenshots
 
 ### Dynamic FP8 decode graph
@@ -78,6 +98,12 @@ can be fused into the adjacent pointwise kernel.
 
 [Open the full-resolution static FP8 image](../assets/nsys-fp8-static-decode-graph.png).
 
+### Static FP8 with fused Q/K RMSNorm, MRoPE, and KV-cache update
+
+![Static FP8 CUDA-graph order with fused Q/K RMSNorm, MRoPE, and KV-cache update](../assets/nsys-fp8-static-qk-mrope-kv-cache-fusion.png)
+
+[Open the full-resolution fused static FP8 image](../assets/nsys-fp8-static-qk-mrope-kv-cache-fusion.png).
+
 The row numbers in these screenshots are Events View row numbers after
 filtering to one CUDA graph launch. They are not model layer numbers.
 
@@ -85,7 +111,8 @@ filtering to one CUDA graph launch. They are not model layer numbers.
 
 The captures profile one 5-second streaming transcription request at
 concurrency one, after three unprofiled warmup requests. The result directory
-contains separate reports for two trace modes:
+contains separate reports for two trace modes and three implementation
+variants:
 
 ```text
 inference/results/nsys/
@@ -96,7 +123,11 @@ inference/results/nsys/
 ├── fp8static_c1_5s_node.nsys-rep
 ├── fp8static_c1_5s_node.sqlite
 ├── fp8static_c1_5s_pytrace_graph.nsys-rep
-└── fp8static_c1_5s_pytrace_graph.sqlite
+├── fp8static_c1_5s_pytrace_graph.sqlite
+├── fp8static_qk_kvcache_fuse_c1_5s_node.nsys-rep
+├── fp8static_qk_kvcache_fuse_c1_5s_node.sqlite
+├── fp8static_qk_kvcache_fuse_c1_5s_pytrace_graph.nsys-rep
+└── fp8static_qk_kvcache_fuse_c1_5s_pytrace_graph.sqlite
 ```
 
 The report pairs answer different questions:
@@ -784,7 +815,260 @@ next_attn_output = combine_attention_partitions(next_attn_partial)
 # Row 22 begins the following static o_proj-input preparation.
 ```
 
-## Direct contrast between the kernel orders
+## Fused static FP8: row-by-row kernel pseudocode
+
+The optimized path keeps the calibrated per-tensor activation scales from the
+static path. Its new optimization is local to the attention setup:
+
+```text
+Before:
+    qkv_proj
+    -> Q/K RMSNorm
+    -> MRoPE
+    -> reshape_and_cache_flash(K, V)
+    -> FlashAttention
+
+After:
+    qkv_proj
+    -> _qk_norm_mrope_kernel(Q, K, V, slot_mapping, cache)
+    -> FlashAttention
+```
+
+The first 15 rows in the fused screenshot cover layer 0 and the beginning of
+layer 1. The following pseudocode maps the logical work to those exact rows.
+Compiler fusion determines the long generated Triton names; names such as
+`triton_red_fused__to_copy_clamp_...` describe all operations fused into that
+node, not a model-level function with the same name.
+
+```python
+# Row 1:
+# triton_red_fused__to_copy_clamp_cutlass_scaled_mm_
+#     mul_reciprocal_rms_norm_0
+#
+# The compiler has fused the graph-entry preparation that occupied static rows
+# 1-2 into one reduction node. Logically it performs the token embedding/input
+# preparation, layer-0 RMSNorm, and fixed-scale qkv_proj activation cast.
+hidden = embedding_table[input_token_ids]
+residual = hidden
+layer0_attn_input = rms_norm(hidden)
+layer0_qkv_input_fp8, layer0_qkv_input_scale = static_fp8_quant(
+    layer0_attn_input,
+    "language_model.model.layers.0.self_attn.qkv_proj",
+)
+
+# Row 2: layer 0 qkv_proj CUTLASS FP8 GEMM
+qkv = fp8_gemm(
+    layer0_qkv_input_fp8,
+    W_qkv_layer0_fp8,
+    layer0_qkv_input_scale,
+    W_qkv_layer0_scale,
+)
+q, k, v = split_qkv(qkv)
+
+# Row 3: _qk_norm_mrope_kernel
+# One program performs the work that previously required the Q/K reduction,
+# the MRoPE pointwise kernel, and reshape_and_cache_flash.
+q_fp32 = q.to(float32)
+k_fp32 = k.to(float32)
+
+# Exact per-head RMSNorm. The implementation reduces the 128-wide head as two
+# 64-wide halves to match the original Inductor reduction order.
+q_norm = per_head_rms_norm(q_fp32, q_norm_weight, head_dim=128)
+k_norm = per_head_rms_norm(k_fp32, k_norm_weight, head_dim=128)
+
+# Apply the three-axis, interleaved Qwen3 MRoPE layout. The current model uses
+# section sizes [24, 20, 20] over the 64 rotary-frequency pairs.
+q_rot = apply_interleaved_mrope(
+    q_norm,
+    positions_3d,
+    cos_sin_cache,
+    sections=[24, 20, 20],
+)
+k_rot = apply_interleaved_mrope(
+    k_norm,
+    positions_3d,
+    cos_sin_cache,
+    sections=[24, 20, 20],
+)
+
+# Publish rotated Q/K for attention. For every valid slot, the same kernel also
+# writes rotated K and the original V projection into the paged BF16 cache.
+q_out = q_rot.to(bfloat16)
+k_out = k_rot.to(bfloat16)
+slot = slot_mapping[token]
+if slot >= 0:
+    key_cache[slot] = k_out
+    value_cache[slot] = v
+
+# The custom op returns a zero-sized dependency tensor. It carries no payload;
+# passing it to attention prevents the cache update from being reordered after
+# the attention read during compilation/CUDA-graph capture.
+cache_update_dependency = empty_dependency_tensor()
+
+# Rows 4-5: layer 0 FlashAttention main kernel + split-KV combine kernel
+attn_partial = flash_attention_sm90(
+    q_out,
+    key_cache,
+    value_cache,
+    cache_update_dependency,
+)
+attn_output = combine_attention_partitions(attn_partial)
+
+# Row 6:
+# triton_poi_fused__to_copy_clamp_cutlass_scaled_mm_
+#     mul_reciprocal_view_0
+attn_output = prepare_attention_output_layout(attn_output)
+o_input_fp8, o_input_scale = static_fp8_quant(
+    attn_output,
+    "language_model.model.layers.0.self_attn.o_proj",
+)
+
+# Row 7: layer 0 o_proj CUTLASS FP8 GEMM
+o_output = fp8_gemm(
+    o_input_fp8,
+    W_o_proj_layer0_fp8,
+    o_input_scale,
+    W_o_proj_layer0_scale,
+)
+
+# Row 8: residual + post-attention RMSNorm + fixed-scale gate_up cast
+mlp_input, residual_after_attn = fused_add_and_rmsnorm(
+    o_output,
+    residual,
+)
+gate_up_input_fp8, gate_up_input_scale = static_fp8_quant(
+    mlp_input,
+    "language_model.model.layers.0.mlp.gate_up_proj",
+)
+
+# Row 9: layer 0 gate_up_proj CUTLASS FP8 GEMM
+gate_up = fp8_gemm(
+    gate_up_input_fp8,
+    W_gate_up_layer0_fp8,
+    gate_up_input_scale,
+    W_gate_up_layer0_scale,
+)
+
+# Row 10: split gate/up + SiLU-and-mul + fixed-scale down_proj cast
+gate, up = split_gate_up(gate_up)
+mlp_activation = silu(gate) * up
+down_input_fp8, down_input_scale = static_fp8_quant(
+    mlp_activation,
+    "language_model.model.layers.0.mlp.down_proj",
+)
+
+# Row 11: layer 0 down_proj CUTLASS FP8 GEMM
+down_output = fp8_gemm(
+    down_input_fp8,
+    W_down_layer0_fp8,
+    down_input_scale,
+    W_down_layer0_scale,
+)
+
+# Row 12: residual + layer 1 input RMSNorm + fixed-scale qkv_proj cast
+layer1_attn_input, residual_after_mlp = fused_add_and_rmsnorm(
+    down_output,
+    residual_after_attn,
+)
+layer1_qkv_input_fp8, layer1_qkv_input_scale = static_fp8_quant(
+    layer1_attn_input,
+    "language_model.model.layers.1.self_attn.qkv_proj",
+)
+
+# Row 13: layer 1 qkv_proj CUTLASS FP8 GEMM
+qkv_next = fp8_gemm(
+    layer1_qkv_input_fp8,
+    W_qkv_layer1_fp8,
+    layer1_qkv_input_scale,
+    W_qkv_layer1_scale,
+)
+q_next, k_next, v_next = split_qkv(qkv_next)
+
+# Row 14: layer 1 _qk_norm_mrope_kernel
+q_next, k_next, cache_update_dependency = fused_qk_norm_mrope_cache_update(
+    q_next,
+    k_next,
+    v_next,
+    q_norm_weight_layer1,
+    k_norm_weight_layer1,
+    positions_3d,
+    cos_sin_cache,
+    slot_mapping,
+    key_cache_layer1,
+    value_cache_layer1,
+)
+
+# Rows 15-16: layer 1 FlashAttention main + combine
+next_attn_partial = flash_attention_sm90(
+    q_next,
+    key_cache_layer1,
+    value_cache_layer1,
+    cache_update_dependency,
+)
+next_attn_output = combine_attention_partitions(next_attn_partial)
+
+# Row 17 begins layer 1 o_proj-input preparation, and the sequence repeats.
+```
+
+The custom fast path is specialized for this model's compatible layout: 16 Q
+heads, 8 KV heads, head dimension 128, BF16 Q/K/V and cache tensors, and
+three-axis MRoPE. Decode and prefill use different Triton launch geometry, but
+the logical work above is the same. If the KV-cache layout is not compatible,
+the patch still uses fused Q/K RMSNorm plus MRoPE and falls back to vLLM's
+native cache-update operation; in that fallback case a separate cache kernel
+will remain visible.
+
+### Unfused-static versus fused-static row order
+
+| Logical operation | Unfused static rows | Fused static rows | What changed |
+| --- | ---: | ---: | --- |
+| Graph-entry input preparation + layer 0 RMSNorm/static QKV cast | 1-2 | 1 | compiler emits one combined entry reduction in this fused capture |
+| Layer 0 `qkv_proj` | 3 | 2 | same CUTLASS FP8 GEMM |
+| Layer 0 Q/K per-head RMSNorm | 4 | 3 | moved into `_qk_norm_mrope_kernel` |
+| Layer 0 MRoPE | 5 | 3 | moved into `_qk_norm_mrope_kernel` |
+| Layer 0 KV-cache write | 6 | 3 | moved into `_qk_norm_mrope_kernel` |
+| Layer 0 FlashAttention main + combine | 7-8 | 4-5 | unchanged attention work, shifted earlier |
+| Layer 0 `o_proj` input preparation | 9 | 6 | unchanged static-scale work, shifted |
+| Layer 0 `o_proj` | 10 | 7 | same GEMM |
+| Residual + post-attention RMSNorm + `gate_up` cast | 11 | 8 | same static-path work |
+| Layer 0 `gate_up_proj` | 12 | 9 | same GEMM |
+| SiLU-and-mul + `down_proj` cast | 13 | 10 | same static-path work |
+| Layer 0 `down_proj` | 14 | 11 | same GEMM |
+| Residual + layer 1 RMSNorm + layer 1 QKV cast | 15 | 12 | same static-path work |
+| Layer 1 `qkv_proj` | 16 | 13 | same GEMM |
+| Layer 1 Q/K RMSNorm + MRoPE + cache write | 17-19 | 14 | three nodes become one |
+| Layer 1 FlashAttention main + combine | 20-21 | 15-16 | unchanged attention work |
+
+The recurring per-layer replacement is therefore:
+
+```python
+# Unfused static attention setup: three CUDA-graph nodes per layer
+q, k = qk_rms_norm(q, k)          # triton_red_*
+q, k = apply_mrope(q, k)          # triton_poi_*
+reshape_and_cache_flash(k, v)     # vLLM CUDA kernel
+
+# Fused static attention setup: one CUDA-graph node per layer
+q, k, dependency = _qk_norm_mrope_kernel(
+    q, k, v, slot_mapping, key_cache, value_cache
+)
+```
+
+In the current dominant-graph captures, the unfused static graph contains 366
+executed nodes per replay and the fused graph contains 309. The accounting is:
+
+```text
+28 layers * (3 old attention-setup nodes - 1 fused node) = 56 fewer nodes
+graph-entry preparation: 2 nodes -> 1 node                 =  1 fewer node
+                                                               --
+total                                                     = 57 fewer nodes
+366 - 57                                                  = 309 nodes
+```
+
+This node reduction identifies what was fused; it is not by itself the latency
+speedup. Use graph-replay envelopes and summed kernel durations from matched
+captures to quantify performance, as described earlier in this guide.
+
+## Direct contrast between dynamic and unfused-static kernel orders
 
 | Logical operation | Dynamic rows | Static rows | Difference |
 | --- | ---: | ---: | --- |

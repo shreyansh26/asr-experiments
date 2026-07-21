@@ -305,6 +305,64 @@ def _lengths_on_device(
     return lengths.to(device=device, non_blocking=True)
 
 
+def run_audio_prefix_eager(
+    encoder: Any,
+    padded_feature: torch.Tensor,
+    chunk_lengths_cpu: torch.Tensor,
+    pack_metadata_cpu: torch.Tensor,
+    cu_seqlens_values: tuple[int, ...],
+    feature_lens_values: tuple[int, ...],
+    aftercnn_lens_values: tuple[int, ...],
+    *,
+    async_tensor_h2d: Any,
+) -> torch.Tensor:
+    """Run the eager pre-layer audio encoder prefix and valid-row pack."""
+    del chunk_lengths_cpu, cu_seqlens_values, feature_lens_values
+    del aftercnn_lens_values
+    if padded_feature.size(0) <= encoder.conv_chunksize:
+        padded_embed = F.gelu(encoder.conv2d1(padded_feature))
+        padded_embed = F.gelu(encoder.conv2d2(padded_embed))
+        padded_embed = F.gelu(encoder.conv2d3(padded_embed))
+    else:
+        padded_embeds = []
+        for chunk in padded_feature.split(encoder.conv_chunksize, dim=0):
+            padded_embed = F.gelu(encoder.conv2d1(chunk))
+            padded_embed = F.gelu(encoder.conv2d2(padded_embed))
+            padded_embed = F.gelu(encoder.conv2d3(padded_embed))
+            padded_embeds.append(padded_embed)
+        padded_embed = torch.cat(padded_embeds, dim=0)
+
+    batch, channels, frequency, time = padded_embed.size()
+    padded_embed = encoder.conv_out(
+        padded_embed.permute(0, 3, 1, 2)
+        .contiguous()
+        .view(batch, time, channels * frequency)
+    )
+    positional_embedding = (
+        encoder.positional_embedding.positional_embedding[
+            : padded_embed.shape[1], :
+        ]
+        .unsqueeze(0)
+        .to(padded_embed.dtype)
+    )
+    padded_embed = padded_embed + positional_embedding
+
+    if padded_embed.is_cuda:
+        return pack_valid_rows(
+            padded_embed,
+            pack_metadata_cpu,
+            async_tensor_h2d=async_tensor_h2d,
+        )
+
+    num_chunks = padded_embed.shape[0]
+    metadata_values = [int(value) for value in pack_metadata_cpu.tolist()]
+    lengths = metadata_values[:num_chunks]
+    return torch.cat(
+        [padded_embed[index, :length] for index, length in enumerate(lengths)],
+        dim=0,
+    )
+
+
 def run_audio_suffix_eager(
     encoder: Any,
     hidden_states: torch.Tensor,
@@ -335,6 +393,7 @@ def _make_patched_forward(
     model_cls: type[Any],
     flash_backend: Any,
     async_tensor_h2d: Any,
+    prefix_runner: Any | None = None,
     suffix_runner: Any | None = None,
 ) -> Any:
     @wraps(original_forward)
@@ -373,37 +432,15 @@ def _make_patched_forward(
         ).transpose(1, 2)
         padded_feature = padded_feature.unsqueeze(1)
 
-        if padded_feature.size(0) <= self.conv_chunksize:
-            padded_embed = F.gelu(self.conv2d1(padded_feature))
-            padded_embed = F.gelu(self.conv2d2(padded_embed))
-            padded_embed = F.gelu(self.conv2d3(padded_embed))
-        else:
-            padded_embeds = []
-            for chunk in padded_feature.split(self.conv_chunksize, dim=0):
-                padded_embed = F.gelu(self.conv2d1(chunk))
-                padded_embed = F.gelu(self.conv2d2(padded_embed))
-                padded_embed = F.gelu(self.conv2d3(padded_embed))
-                padded_embeds.append(padded_embed)
-            padded_embed = torch.cat(padded_embeds, dim=0)
-
-        batch, channels, frequency, time = padded_embed.size()
-        padded_embed = self.conv_out(
-            padded_embed.permute(0, 3, 1, 2)
-            .contiguous()
-            .view(batch, time, channels * frequency)
-        )
-        positional_embedding = (
-            self.positional_embedding.positional_embedding[
-                : padded_embed.shape[1], :
-            ]
-            .unsqueeze(0)
-            .to(padded_embed.dtype)
-        )
-        padded_embed = padded_embed + positional_embedding
-
-        hidden_states = pack_valid_rows(
-            padded_embed,
+        selected_prefix_runner = prefix_runner or run_audio_prefix_eager
+        hidden_states = selected_prefix_runner(
+            self,
+            padded_feature,
+            chunk_lengths,
             pack_metadata_cpu,
+            tuple(cu_seqlens_cpu),
+            tuple(int(value) for value in feature_lens.tolist()),
+            tuple(int(value) for value in aftercnn_lens.tolist()),
             async_tensor_h2d=async_tensor_h2d,
         )
         cu_seqlens = async_tensor_h2d(
@@ -447,6 +484,7 @@ def _make_cpu_field_config(
 
 def install_audio_cpu_metadata_pack_patch(
     *,
+    prefix_runner: Any | None = None,
     suffix_runner: Any | None = None,
 ) -> bool:
     """Install the exact-version CPU-metadata audio encoder fast path."""
@@ -491,6 +529,7 @@ def install_audio_cpu_metadata_pack_patch(
         model_cls=model_cls,
         flash_backend=AttentionBackendEnum.FLASH_ATTN,
         async_tensor_h2d=async_tensor_h2d,
+        prefix_runner=prefix_runner,
         suffix_runner=suffix_runner,
     )
     patched_field_config = _make_cpu_field_config(

@@ -435,10 +435,6 @@ def install_audio_cpu_metadata_pack_patch() -> bool:
             MAX_SEQLEN_ENV_NAME,
         )
         return False
-    if not install_audio_cpu_maxseqlen_patch():
-        logger.warning("Audio CPU max-seqlen prerequisite was not installed")
-        return False
-
     from vllm.model_executor.models import qwen3_asr as asr_module
     from vllm.model_executor.models.qwen3_asr import Qwen3OmniMoeAudioEncoder
     from vllm.multimodal.inputs import MultiModalFieldConfig
@@ -477,8 +473,16 @@ def install_audio_cpu_metadata_pack_patch() -> bool:
         MultiModalFieldConfig,
     )
 
-    # Both compatibility checks and wrappers are complete before either global
-    # seam is changed, so installation is atomic from the caller's perspective.
+    # Complete every metadata compatibility check and wrapper construction
+    # before installing even the max-seqlen prerequisite.  A source mismatch
+    # therefore leaves all three global seams unchanged.
+    if not install_audio_cpu_maxseqlen_patch(
+        model_cls=model_cls,
+        flash_backend=AttentionBackendEnum.FLASH_ATTN,
+    ):
+        logger.warning("Audio CPU max-seqlen prerequisite was not installed")
+        return False
+
     model_cls.forward = patched_forward
     asr_module._qwen3asr_field_config = patched_field_config
     return True

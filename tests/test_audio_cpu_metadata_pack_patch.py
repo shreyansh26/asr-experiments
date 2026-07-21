@@ -203,6 +203,25 @@ class AudioCpuMetadataPackPatchTest(unittest.TestCase):
         )
         self.assertFalse(_installed_sources_are_supported(model_cls, fake_module))
 
+    def test_source_drift_does_not_install_max_seqlen_prerequisite(self) -> None:
+        with (
+            patch.dict(
+                os.environ,
+                {ENV_NAME: "1", MAX_SEQLEN_ENV_NAME: "1"},
+                clear=True,
+            ),
+            patch(
+                "audio_cpu_metadata_pack_patch._installed_sources_are_supported",
+                return_value=False,
+            ),
+            patch(
+                "audio_cpu_metadata_pack_patch.install_audio_cpu_maxseqlen_patch"
+            ) as install_max_seqlen,
+        ):
+            self.assertFalse(install_audio_cpu_metadata_pack_patch())
+
+        install_max_seqlen.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

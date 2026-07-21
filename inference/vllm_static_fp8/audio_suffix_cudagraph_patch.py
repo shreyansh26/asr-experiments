@@ -1,4 +1,4 @@
-"""Exact-shape CUDA graph cache for the Qwen3-ASR post-pack audio suffix."""
+"""Exact-admitted row-bucket CUDA graphs for the Qwen3-ASR audio suffix."""
 
 from __future__ import annotations
 
@@ -33,14 +33,16 @@ _EXPECTED_MAX_SEQLEN = 104
 _TAIL_ROWS = frozenset({264, 265, 267, 268, 270, 272, 273})
 _NATURAL_FULL_CHUNK_ROWS = frozenset(range(377, 391))
 _SUPPORTED_ROWS = _TAIL_ROWS | _NATURAL_FULL_CHUNK_ROWS
-_MAX_CACHE_ENTRIES = len(_SUPPORTED_ROWS)
+_TAIL_BUCKET_ROWS = 273
+_NATURAL_BUCKET_ROWS = 390
+_MAX_CACHE_ENTRIES = 2
 _WARMUP_ITERATIONS = 3
 _PROBATION_OBSERVATIONS = 8
 
 
 @dataclass(frozen=True)
 class SuffixGraphKey:
-    """All launch-static state that can change suffix attention behavior."""
+    """Exact runtime state that must pass its own probation and admission."""
 
     rows: int
     cu_seqlens_numel: int
@@ -51,9 +53,21 @@ class SuffixGraphKey:
     cu_seqlens_values: tuple[int, ...]
 
 
+@dataclass(frozen=True)
+class SuffixBucketKey:
+    """Graph-static state shared by one canonical row-count family."""
+
+    bucket_rows: int
+    graph_cu_seqlens_numel: int
+    dtype: torch.dtype
+    device_type: str
+    device_index: int | None
+    max_seqlen_value: int
+
+
 @dataclass
 class _SuffixGraphEntry:
-    key: SuffixGraphKey
+    key: SuffixBucketKey
     static_hidden_states: torch.Tensor
     static_cu_seqlens: torch.Tensor
     static_max_seqlen: torch.Tensor
@@ -81,6 +95,38 @@ def _canonical_cu_seqlens_values(rows: int) -> tuple[int, ...] | None:
     if rows in _NATURAL_FULL_CHUNK_ROWS:
         return (0, 104, 208, 312, rows)
     return None
+
+
+def _bucket_rows(rows: int) -> int | None:
+    if rows in _TAIL_ROWS:
+        return _TAIL_BUCKET_ROWS
+    if rows in _NATURAL_FULL_CHUNK_ROWS:
+        return _NATURAL_BUCKET_ROWS
+    return None
+
+
+def _make_bucket_key(key: SuffixGraphKey) -> SuffixBucketKey:
+    bucket_rows = _bucket_rows(key.rows)
+    if bucket_rows is None:
+        raise ValueError("Unsupported exact suffix key cannot select a bucket")
+    return SuffixBucketKey(
+        bucket_rows=bucket_rows,
+        graph_cu_seqlens_numel=key.cu_seqlens_numel + 1,
+        dtype=key.dtype,
+        device_type=key.device_type,
+        device_index=key.device_index,
+        max_seqlen_value=key.max_seqlen_value,
+    )
+
+
+def _graph_cu_seqlens_values(key: SuffixGraphKey) -> tuple[int, ...]:
+    bucket_rows = _bucket_rows(key.rows)
+    if bucket_rows is None:
+        raise ValueError("Unsupported exact suffix key cannot select a bucket")
+    # Always append the endpoint so each family has one fixed metadata shape.
+    # For M == bucket this is an intentional zero-length final sequence; exact
+    # admission and the CUDA helper must validate that installed FA3 path.
+    return (*key.cu_seqlens_values, bucket_rows)
 
 
 def _make_suffix_graph_key(
@@ -130,13 +176,20 @@ def _make_suffix_graph_key(
     )
 
 
-def _output_is_supported(output: Any, key: SuffixGraphKey) -> bool:
+def _output_is_supported(
+    output: Any,
+    *,
+    rows: int,
+    dtype: torch.dtype,
+    device_type: str,
+    device_index: int | None,
+) -> bool:
     return (
         isinstance(output, torch.Tensor)
-        and output.shape == (key.rows, _OUTPUT_WIDTH)
-        and output.dtype == key.dtype
-        and output.device.type == key.device_type
-        and output.device.index == key.device_index
+        and output.shape == (rows, _OUTPUT_WIDTH)
+        and output.dtype == dtype
+        and output.device.type == device_type
+        and output.device.index == device_index
     )
 
 
@@ -192,6 +245,8 @@ class _TorchCudaGraphBackend:
         self,
         entry: _SuffixGraphEntry,
         hidden_states: torch.Tensor,
+        cu_seqlens: torch.Tensor,
+        rows: int,
     ) -> torch.Tensor:
         caller_stream = torch.cuda.current_stream(hidden_states.device)
         execution_stream = entry.execution_stream
@@ -201,10 +256,18 @@ class _TorchCudaGraphBackend:
         # then ordered FIFO on this one stream.
         execution_stream.wait_stream(caller_stream)
         with torch.cuda.stream(execution_stream):
-            entry.static_hidden_states.copy_(hidden_states, non_blocking=True)
+            entry.static_hidden_states[:rows].copy_(
+                hidden_states,
+                non_blocking=True,
+            )
+            entry.static_cu_seqlens[:-1].copy_(
+                cu_seqlens,
+                non_blocking=True,
+            )
             hidden_states.record_stream(execution_stream)
+            cu_seqlens.record_stream(execution_stream)
             entry.graph.replay()
-            output = entry.output.clone()
+            output = entry.output[:rows].clone()
 
         # Insert an asynchronous dependency back to the caller. record_stream
         # keeps the clone's storage alive if the caller consumes it after this
@@ -218,7 +281,7 @@ class _TorchCudaGraphBackend:
 
 
 class ExactShapeAudioSuffixGraphCache:
-    """Capture one verified suffix graph per exact shape and segmentation."""
+    """Share two row-bucket graphs after exact per-request admission."""
 
     def __init__(
         self,
@@ -232,14 +295,15 @@ class ExactShapeAudioSuffixGraphCache:
         self._backend = backend or _TorchCudaGraphBackend()
         self._max_entries = max_entries
         self._warmup_iterations = warmup_iterations
-        self._entries: dict[SuffixGraphKey, _SuffixGraphEntry] = {}
+        self._entries: dict[SuffixBucketKey, _SuffixGraphEntry] = {}
+        self._admitted_keys: dict[SuffixGraphKey, SuffixBucketKey] = {}
         self._observation_counts: dict[SuffixGraphKey, int] = {}
         self._rejected_keys: set[SuffixGraphKey] = set()
         self._logged_capacity = False
         # This lock protects the cache state and intentionally remains held
-        # through cold capture, so concurrent observation-eight calls cannot
-        # capture/insert the same key twice. Hot GPU transactions use
-        # per-entry locks.
+        # through cold capture/admission, so concurrent observation-eight calls
+        # cannot capture/insert the same bucket twice. Hot GPU transactions use
+        # per-entry locks shared by all exact keys in that bucket.
         self._cache_lock = threading.Lock()
 
     @property
@@ -251,6 +315,11 @@ class ExactShapeAudioSuffixGraphCache:
     def rejected_count(self) -> int:
         with self._cache_lock:
             return len(self._rejected_keys)
+
+    @property
+    def admitted_count(self) -> int:
+        with self._cache_lock:
+            return len(self._admitted_keys)
 
     def _eager(
         self,
@@ -271,46 +340,69 @@ class ExactShapeAudioSuffixGraphCache:
     def _replay_entry(
         self,
         entry: _SuffixGraphEntry,
+        key: SuffixGraphKey,
         hidden_states: torch.Tensor,
+        cu_seqlens: torch.Tensor,
     ) -> torch.Tensor:
         # Holding the lock until the complete transaction has been enqueued is
         # sufficient: every transaction uses entry.execution_stream, so CUDA
         # FIFO ordering completes the prior output clone before the next input
         # copy can overwrite graph-owned buffers. No device sync is needed.
         with entry.replay_lock:
-            output = self._backend.replay_and_clone(entry, hidden_states)
+            output = self._backend.replay_and_clone(
+                entry,
+                hidden_states,
+                cu_seqlens,
+                key.rows,
+            )
             entry.replay_count += 1
             replay_count = entry.replay_count
             # Power-of-two milestones expose a precise cumulative counter while
             # avoiding a log operation on every admitted hot replay.
             if (replay_count & (replay_count - 1)) == 0:
                 logger.info(
-                    "ASR audio post-pack suffix CUDA graph replay active "
-                    "cu_seqlens=%s observation=%d/%d cumulative_replays=%d",
-                    entry.key.cu_seqlens_values,
+                    "ASR bucketed audio suffix CUDA graph replay active "
+                    "cu_seqlens=%s bucket_rows=%d observation=%d/%d "
+                    "bucket_cumulative_replays=%d",
+                    key.cu_seqlens_values,
+                    entry.key.bucket_rows,
                     _PROBATION_OBSERVATIONS,
                     _PROBATION_OBSERVATIONS,
                     replay_count,
                 )
         return output
 
-    def _capture_entry_locked(
+    def _capture_bucket_entry_locked(
         self,
         encoder: Any,
         hidden_states: torch.Tensor,
         cu_seqlens: torch.Tensor,
         max_seqlen: torch.Tensor,
         key: SuffixGraphKey,
-    ) -> torch.Tensor:
-        """Capture one key while ``self._cache_lock`` is held."""
+        bucket_key: SuffixBucketKey,
+    ) -> _SuffixGraphEntry | None:
+        """Capture one family bucket while ``self._cache_lock`` is held."""
         capture_start_ns = time.perf_counter_ns()
-        reference_output: torch.Tensor | None = None
+        graph_values = _graph_cu_seqlens_values(key)
         try:
-            static_hidden_states = torch.empty_like(hidden_states)
-            static_cu_seqlens = torch.empty_like(cu_seqlens)
+            static_hidden_states = hidden_states.new_zeros(
+                (bucket_key.bucket_rows, _INPUT_WIDTH)
+            )
+            static_hidden_states[: key.rows].copy_(
+                hidden_states,
+                non_blocking=True,
+            )
+            static_cu_seqlens = torch.empty(
+                (bucket_key.graph_cu_seqlens_numel,),
+                dtype=cu_seqlens.dtype,
+                device=cu_seqlens.device,
+            )
+            static_cu_seqlens[:-1].copy_(
+                cu_seqlens,
+                non_blocking=True,
+            )
+            static_cu_seqlens[-1].fill_(bucket_key.bucket_rows)
             static_max_seqlen = torch.empty_like(max_seqlen)
-            static_hidden_states.copy_(hidden_states, non_blocking=True)
-            static_cu_seqlens.copy_(cu_seqlens, non_blocking=True)
             static_max_seqlen.copy_(max_seqlen, non_blocking=True)
 
             def static_suffix() -> torch.Tensor:
@@ -319,7 +411,7 @@ class ExactShapeAudioSuffixGraphCache:
                     static_hidden_states,
                     static_cu_seqlens,
                     static_max_seqlen,
-                    key.cu_seqlens_values,
+                    graph_values,
                 )
 
             graph, graph_output, execution_stream = self._backend.capture(
@@ -327,13 +419,20 @@ class ExactShapeAudioSuffixGraphCache:
                 device=hidden_states.device,
                 warmup_iterations=self._warmup_iterations,
             )
-            if not _output_is_supported(graph_output, key):
+            if not _output_is_supported(
+                graph_output,
+                rows=bucket_key.bucket_rows,
+                dtype=bucket_key.dtype,
+                device_type=bucket_key.device_type,
+                device_index=bucket_key.device_index,
+            ):
                 raise RuntimeError(
-                    "Captured audio suffix did not return [M, 2048]"
+                    "Captured bucketed audio suffix did not return "
+                    "[bucket_rows, 2048]"
                 )
 
             entry = _SuffixGraphEntry(
-                key=key,
+                key=bucket_key,
                 static_hidden_states=static_hidden_states,
                 static_cu_seqlens=static_cu_seqlens,
                 static_max_seqlen=static_max_seqlen,
@@ -341,8 +440,55 @@ class ExactShapeAudioSuffixGraphCache:
                 output=graph_output,
                 execution_stream=execution_stream,
             )
+            self._entries[bucket_key] = entry
+            capture_duration_ms = (
+                time.perf_counter_ns() - capture_start_ns
+            ) / 1_000_000
+            logger.info(
+                "Captured bucketed audio suffix CUDA graph graph_cu_seqlens=%s "
+                "bucket_rows=%d observation=%d/%d bucket_occupancy=%d/%d "
+                "capture_duration_ms=%.3f cumulative_replays=0",
+                graph_values,
+                bucket_key.bucket_rows,
+                _PROBATION_OBSERVATIONS,
+                _PROBATION_OBSERVATIONS,
+                len(self._entries),
+                self._max_entries,
+                capture_duration_ms,
+            )
+            return entry
+        except Exception as error:
+            capture_duration_ms = (
+                time.perf_counter_ns() - capture_start_ns
+            ) / 1_000_000
+            logger.warning(
+                "Bucketed audio suffix CUDA graph capture failed closed "
+                "cu_seqlens=%s bucket_rows=%d observation=%d/%d "
+                "bucket_occupancy=%d/%d "
+                "capture_duration_ms=%.3f cumulative_replays=0: %s",
+                key.cu_seqlens_values,
+                bucket_key.bucket_rows,
+                _PROBATION_OBSERVATIONS,
+                _PROBATION_OBSERVATIONS,
+                len(self._entries),
+                self._max_entries,
+                capture_duration_ms,
+                error,
+            )
+            return None
 
-            # Gate the real captured module stack before admitting this key.
+    def _admit_key_locked(
+        self,
+        encoder: Any,
+        entry: _SuffixGraphEntry,
+        hidden_states: torch.Tensor,
+        cu_seqlens: torch.Tensor,
+        max_seqlen: torch.Tensor,
+        key: SuffixGraphKey,
+    ) -> torch.Tensor:
+        """Bitwise-gate one exact runtime key against unpadded eager."""
+        reference_output: torch.Tensor | None = None
+        try:
             reference_output = self._eager(
                 encoder,
                 hidden_states,
@@ -350,50 +496,66 @@ class ExactShapeAudioSuffixGraphCache:
                 max_seqlen,
                 key.cu_seqlens_values,
             )
-            if not _output_is_supported(reference_output, key):
+            if not _output_is_supported(
+                reference_output,
+                rows=key.rows,
+                dtype=key.dtype,
+                device_type=key.device_type,
+                device_index=key.device_index,
+            ):
                 raise RuntimeError("Eager audio suffix did not return [M, 2048]")
             candidate_output = self._replay_entry_without_log(
                 entry,
+                key,
                 hidden_states,
+                cu_seqlens,
             )
-            # This comparison synchronizes once during key admission. There is
-            # no equality check or host synchronization on admitted replays.
+            if not _output_is_supported(
+                candidate_output,
+                rows=key.rows,
+                dtype=key.dtype,
+                device_type=key.device_type,
+                device_index=key.device_index,
+            ):
+                raise RuntimeError(
+                    "Bucketed audio suffix replay did not return [M, 2048]"
+                )
+            # This comparison synchronizes once for each exact M. Admitted hot
+            # replays never compare or synchronize on the host.
             if not self._backend.equal(candidate_output, reference_output):
-                raise RuntimeError("Captured audio suffix is not bitwise exact")
+                raise RuntimeError(
+                    "Bucketed audio suffix is not bitwise equal to unpadded eager"
+                )
 
-            self._entries[key] = entry
-            capture_duration_ms = (
-                time.perf_counter_ns() - capture_start_ns
-            ) / 1_000_000
+            self._admitted_keys[key] = entry.key
             logger.info(
-                "Captured bitwise-exact audio suffix CUDA graph "
-                "cu_seqlens=%s observation=%d/%d occupancy=%d/%d "
-                "capture_duration_ms=%.3f cumulative_replays=0",
+                "Admitted bitwise-exact bucketed audio suffix "
+                "cu_seqlens=%s graph_cu_seqlens=%s bucket_rows=%d "
+                "observation=%d/%d admitted=%d/%d",
                 key.cu_seqlens_values,
+                _graph_cu_seqlens_values(key),
+                entry.key.bucket_rows,
                 _PROBATION_OBSERVATIONS,
                 _PROBATION_OBSERVATIONS,
-                len(self._entries),
-                self._max_entries,
-                capture_duration_ms,
+                len(self._admitted_keys),
+                len(_SUPPORTED_ROWS),
             )
-            # Preserve eager output ownership on the capture call. Replays use
-            # an independent clone from the next exact-key hit onward.
+            # Observation eight returns the independently allocated eager
+            # result. Graph-owned output is cloned only on subsequent hits.
             return reference_output
         except Exception as error:
             self._rejected_keys.add(key)
-            capture_duration_ms = (
-                time.perf_counter_ns() - capture_start_ns
-            ) / 1_000_000
             logger.warning(
-                "Audio suffix CUDA graph capture failed closed "
-                "cu_seqlens=%s observation=%d/%d occupancy=%d/%d "
-                "capture_duration_ms=%.3f cumulative_replays=0: %s",
+                "Bucketed audio suffix admission failed closed "
+                "cu_seqlens=%s graph_cu_seqlens=%s bucket_rows=%d "
+                "observation=%d/%d admitted=%d/%d: %s",
                 key.cu_seqlens_values,
+                _graph_cu_seqlens_values(key),
+                entry.key.bucket_rows,
                 _PROBATION_OBSERVATIONS,
                 _PROBATION_OBSERVATIONS,
-                len(self._entries),
-                self._max_entries,
-                capture_duration_ms,
+                len(self._admitted_keys),
+                len(_SUPPORTED_ROWS),
                 error,
             )
             if reference_output is not None:
@@ -409,10 +571,17 @@ class ExactShapeAudioSuffixGraphCache:
     def _replay_entry_without_log(
         self,
         entry: _SuffixGraphEntry,
+        key: SuffixGraphKey,
         hidden_states: torch.Tensor,
+        cu_seqlens: torch.Tensor,
     ) -> torch.Tensor:
         with entry.replay_lock:
-            return self._backend.replay_and_clone(entry, hidden_states)
+            return self._backend.replay_and_clone(
+                entry,
+                hidden_states,
+                cu_seqlens,
+                key.rows,
+            )
 
     def run(
         self,
@@ -450,40 +619,68 @@ class ExactShapeAudioSuffixGraphCache:
                 tuple(cu_seqlens_values),
             )
 
+        bucket_key = _make_bucket_key(key)
         with self._cache_lock:
             key_rejected = key in self._rejected_keys
-            entry = self._entries.get(key)
+            admitted_bucket = self._admitted_keys.get(key)
+            entry = self._entries.get(bucket_key)
+            key_admitted = admitted_bucket == bucket_key and entry is not None
             cache_full = entry is None and len(self._entries) >= self._max_entries
             if cache_full and not self._logged_capacity:
                 logger.warning(
-                    "Audio suffix CUDA graph cache is full; cu_seqlens=%s "
-                    "observation=%d/%d occupancy=%d/%d; using eager suffix",
+                    "Bucketed audio suffix CUDA graph cache is full; "
+                    "cu_seqlens=%s bucket_rows=%d observation=%d/%d "
+                    "bucket_occupancy=%d/%d; using eager suffix",
                     key.cu_seqlens_values,
+                    bucket_key.bucket_rows,
                     self._observation_counts.get(key, 0),
                     _PROBATION_OBSERVATIONS,
                     len(self._entries),
                     self._max_entries,
                 )
                 self._logged_capacity = True
-            if not key_rejected and entry is None and not cache_full:
+            if not key_rejected and not key_admitted and not cache_full:
                 observation_count = self._observation_counts.get(key, 0) + 1
                 self._observation_counts[key] = observation_count
                 if observation_count == _PROBATION_OBSERVATIONS:
-                    return self._capture_entry_locked(
+                    if entry is None:
+                        entry = self._capture_bucket_entry_locked(
+                            encoder,
+                            hidden_states,
+                            cu_seqlens,
+                            max_seqlen,
+                            key,
+                            bucket_key,
+                        )
+                    if entry is None:
+                        self._rejected_keys.add(key)
+                        return self._eager(
+                            encoder,
+                            hidden_states,
+                            cu_seqlens,
+                            max_seqlen,
+                            key.cu_seqlens_values,
+                        )
+                    return self._admit_key_locked(
                         encoder,
+                        entry,
                         hidden_states,
                         cu_seqlens,
                         max_seqlen,
                         key,
                     )
                 logger.info(
-                    "Audio suffix CUDA graph probation uses eager suffix "
-                    "cu_seqlens=%s observation=%d/%d occupancy=%d/%d",
+                    "Bucketed audio suffix CUDA graph probation uses eager "
+                    "suffix cu_seqlens=%s bucket_rows=%d observation=%d/%d "
+                    "bucket_occupancy=%d/%d admitted=%d/%d",
                     key.cu_seqlens_values,
+                    bucket_key.bucket_rows,
                     observation_count,
                     _PROBATION_OBSERVATIONS,
                     len(self._entries),
                     self._max_entries,
+                    len(self._admitted_keys),
+                    len(_SUPPORTED_ROWS),
                 )
 
         if key_rejected:
@@ -495,8 +692,13 @@ class ExactShapeAudioSuffixGraphCache:
                 key.cu_seqlens_values,
             )
 
-        if entry is not None:
-            return self._replay_entry(entry, hidden_states)
+        if key_admitted and entry is not None:
+            return self._replay_entry(
+                entry,
+                key,
+                hidden_states,
+                cu_seqlens,
+            )
 
         return self._eager(
             encoder,
@@ -515,7 +717,7 @@ def run_audio_suffix_cudagraph(
     *,
     cu_seqlens_values: tuple[int, ...],
 ) -> torch.Tensor:
-    """Run an exact cached graph or the identical eager suffix."""
+    """Run an exact-admitted row-bucket graph or the unpadded eager suffix."""
     cache = getattr(encoder, _CACHE_ATTR, None)
     if cache is None:
         # The cache-map lock cannot help until one cache is attached. Serialize

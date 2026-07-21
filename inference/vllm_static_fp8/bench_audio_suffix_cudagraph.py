@@ -15,6 +15,7 @@ import torch
 from audio_cpu_metadata_pack_patch import run_audio_suffix_eager
 from audio_suffix_cudagraph_patch import (
     _MAX_CACHE_ENTRIES,
+    _PROBATION_OBSERVATIONS,
     _SUPPORTED_ROWS,
     ExactShapeAudioSuffixGraphCache,
 )
@@ -354,15 +355,24 @@ def _main() -> None:
                 generator=generator,
             )
 
-            # First call performs side-stream warmup, capture, and its own
-            # bitwise eager-vs-replay admission check for this exact key.
-            cache.run(
-                encoder,
-                initial_hidden,
-                cu_seqlens,
-                max_seqlen,
-                cu_seqlens_values=cu_values,
-            )
+            entries_before = cache.entry_count
+            for observation in range(1, _PROBATION_OBSERVATIONS + 1):
+                cache.run(
+                    encoder,
+                    initial_hidden,
+                    cu_seqlens,
+                    max_seqlen,
+                    cu_seqlens_values=cu_values,
+                )
+                expected_entries = entries_before + (
+                    observation == _PROBATION_OBSERVATIONS
+                )
+                if cache.entry_count != expected_entries:
+                    raise AssertionError(
+                        "exact-key probation must stay eager for observations "
+                        f"1-7 and capture only on 8; case={segments}, "
+                        f"observation={observation}"
+                    )
             replay_hidden = torch.randn(
                 (rows, 1024),
                 dtype=torch.bfloat16,

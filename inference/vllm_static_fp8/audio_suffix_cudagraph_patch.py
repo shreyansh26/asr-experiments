@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 import threading
+import time
 from typing import Any, Callable
 
 import torch
@@ -33,6 +34,7 @@ _EXPECTED_CU_SEQLENS_NUMEL = 4
 _SUPPORTED_ROWS = frozenset({264, 265, 267, 268, 270, 272, 273})
 _MAX_CACHE_ENTRIES = len(_SUPPORTED_ROWS)
 _WARMUP_ITERATIONS = 3
+_PROBATION_OBSERVATIONS = 8
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,7 @@ class _SuffixGraphEntry:
     graph: Any
     output: torch.Tensor
     execution_stream: Any
+    replay_count: int = 0
     replay_lock: threading.Lock = field(
         default_factory=threading.Lock,
         repr=False,
@@ -227,12 +230,13 @@ class ExactShapeAudioSuffixGraphCache:
         self._max_entries = max_entries
         self._warmup_iterations = warmup_iterations
         self._entries: dict[SuffixGraphKey, _SuffixGraphEntry] = {}
+        self._observation_counts: dict[SuffixGraphKey, int] = {}
         self._rejected_keys: set[SuffixGraphKey] = set()
         self._logged_capacity = False
-        self._logged_replay = False
         # This lock protects the cache state and intentionally remains held
-        # through cold capture, so two first calls cannot capture/insert the
-        # same key concurrently. Hot GPU transactions use per-entry locks.
+        # through cold capture, so concurrent observation-eight calls cannot
+        # capture/insert the same key twice. Hot GPU transactions use
+        # per-entry locks.
         self._cache_lock = threading.Lock()
 
     @property
@@ -272,19 +276,19 @@ class ExactShapeAudioSuffixGraphCache:
         # copy can overwrite graph-owned buffers. No device sync is needed.
         with entry.replay_lock:
             output = self._backend.replay_and_clone(entry, hidden_states)
-
-        # Avoid a second cache-wide lock on the steady-state hot path once the
-        # one-time marker has been emitted.
-        if not self._logged_replay:
-            with self._cache_lock:
-                if not self._logged_replay:
-                    logger.info(
-                        "ASR audio post-pack suffix CUDA graph replay active "
-                        "for M=%d and %d sequences",
-                        entry.key.rows,
-                        entry.key.cu_seqlens_numel - 1,
-                    )
-                    self._logged_replay = True
+            entry.replay_count += 1
+            replay_count = entry.replay_count
+            # Power-of-two milestones expose a precise cumulative counter while
+            # avoiding a log operation on every admitted hot replay.
+            if (replay_count & (replay_count - 1)) == 0:
+                logger.info(
+                    "ASR audio post-pack suffix CUDA graph replay active "
+                    "cu_seqlens=%s observation=%d/%d cumulative_replays=%d",
+                    entry.key.cu_seqlens_values,
+                    _PROBATION_OBSERVATIONS,
+                    _PROBATION_OBSERVATIONS,
+                    replay_count,
+                )
         return output
 
     def _capture_entry_locked(
@@ -296,6 +300,7 @@ class ExactShapeAudioSuffixGraphCache:
         key: SuffixGraphKey,
     ) -> torch.Tensor:
         """Capture one key while ``self._cache_lock`` is held."""
+        capture_start_ns = time.perf_counter_ns()
         reference_output: torch.Tensor | None = None
         try:
             static_hidden_states = torch.empty_like(hidden_states)
@@ -354,22 +359,38 @@ class ExactShapeAudioSuffixGraphCache:
                 raise RuntimeError("Captured audio suffix is not bitwise exact")
 
             self._entries[key] = entry
+            capture_duration_ms = (
+                time.perf_counter_ns() - capture_start_ns
+            ) / 1_000_000
             logger.info(
-                "Captured bitwise-exact audio suffix CUDA graph for M=%d and "
-                "%d sequences",
-                key.rows,
-                key.cu_seqlens_numel - 1,
+                "Captured bitwise-exact audio suffix CUDA graph "
+                "cu_seqlens=%s observation=%d/%d occupancy=%d/%d "
+                "capture_duration_ms=%.3f cumulative_replays=0",
+                key.cu_seqlens_values,
+                _PROBATION_OBSERVATIONS,
+                _PROBATION_OBSERVATIONS,
+                len(self._entries),
+                self._max_entries,
+                capture_duration_ms,
             )
             # Preserve eager output ownership on the capture call. Replays use
             # an independent clone from the next exact-key hit onward.
             return reference_output
         except Exception as error:
             self._rejected_keys.add(key)
+            capture_duration_ms = (
+                time.perf_counter_ns() - capture_start_ns
+            ) / 1_000_000
             logger.warning(
-                "Audio suffix CUDA graph capture failed closed for M=%d and "
-                "%d sequences: %s",
-                key.rows,
-                key.cu_seqlens_numel - 1,
+                "Audio suffix CUDA graph capture failed closed "
+                "cu_seqlens=%s observation=%d/%d occupancy=%d/%d "
+                "capture_duration_ms=%.3f cumulative_replays=0: %s",
+                key.cu_seqlens_values,
+                _PROBATION_OBSERVATIONS,
+                _PROBATION_OBSERVATIONS,
+                len(self._entries),
+                self._max_entries,
+                capture_duration_ms,
                 error,
             )
             if reference_output is not None:
@@ -432,19 +453,34 @@ class ExactShapeAudioSuffixGraphCache:
             cache_full = entry is None and len(self._entries) >= self._max_entries
             if cache_full and not self._logged_capacity:
                 logger.warning(
-                    "Audio suffix CUDA graph cache is full at %d exact keys; "
-                    "using eager suffix for M=%d",
+                    "Audio suffix CUDA graph cache is full; cu_seqlens=%s "
+                    "observation=%d/%d occupancy=%d/%d; using eager suffix",
+                    key.cu_seqlens_values,
+                    self._observation_counts.get(key, 0),
+                    _PROBATION_OBSERVATIONS,
+                    len(self._entries),
                     self._max_entries,
-                    key.rows,
                 )
                 self._logged_capacity = True
             if not key_rejected and entry is None and not cache_full:
-                return self._capture_entry_locked(
-                    encoder,
-                    hidden_states,
-                    cu_seqlens,
-                    max_seqlen,
-                    key,
+                observation_count = self._observation_counts.get(key, 0) + 1
+                self._observation_counts[key] = observation_count
+                if observation_count == _PROBATION_OBSERVATIONS:
+                    return self._capture_entry_locked(
+                        encoder,
+                        hidden_states,
+                        cu_seqlens,
+                        max_seqlen,
+                        key,
+                    )
+                logger.info(
+                    "Audio suffix CUDA graph probation uses eager suffix "
+                    "cu_seqlens=%s observation=%d/%d occupancy=%d/%d",
+                    key.cu_seqlens_values,
+                    observation_count,
+                    _PROBATION_OBSERVATIONS,
+                    len(self._entries),
+                    self._max_entries,
                 )
 
         if key_rejected:

@@ -3,10 +3,10 @@
 ## Status
 
 This is a CUDA-unvalidated research candidate on branch
-`opt3/audio-suffix-cudagraph`, based on accepted CPU-metadata commit
-`10bbc1c1e73c1404551caf350dec0188d94665d4`. No GPU helper, service benchmark,
-or CER/WER run has been performed yet. The launcher must not be treated as a
-winner until all gates below pass.
+`opt3/audio-suffix-cudagraph-probation`, based on concurrent-safe suffix graph
+commit `f6c6967436ce690c84f7bc9095db3dc33ff0a4b5`. No GPU helper, service
+benchmark, or CER/WER run has been performed yet. The launcher must not be
+treated as a winner until all gates below pass.
 
 No PyTorch, vLLM, Triton, or other dependency version changed.
 
@@ -49,8 +49,9 @@ M in {264, 265, 267, 268, 270, 272, 273}
 
 Each encoder instance owns at most seven graph entries. Sequential warmup calls
 have `cu_seqlens.numel() == 2`, so they remain eager and cannot fill or starve
-the intended B16 keys. There is no eviction or shape padding. Once full, any
-unseen exact-content key runs the identical eager suffix.
+the intended B16 keys. Each supported exact key also owns a probation counter.
+There is no eviction, LRU, or shape padding. Once full, any unseen exact-content
+key runs the identical eager suffix.
 
 The key contains:
 
@@ -84,27 +85,49 @@ caches to the same encoder. An unsupported layout, training/grad mode, nested
 capture, unexpected 24-layer/1024-wide contract, cache overflow, capture
 exception, or output other than `[M, 2048]` falls back to eager execution.
 
-## Admission and exactness
+## Probation, admission, and exactness
 
-The first supported call for a key performs three eager side-stream warmups,
-captures the exact eager suffix callable, then runs both eager and graph replay
-on the same input. The entry is admitted only when the outputs are bitwise
-equal. Capture failure or any mismatch permanently rejects that exact key for
-the process and returns the eager output. The capture call itself also returns
-the independently allocated eager result; graph-owned stable output is exposed
-only internally and is cloned before every later exact-key return.
-
-`torch.equal` is used only for first-key admission and therefore synchronizes
-only that cold capture call. Admitted replay calls do not compare or synchronize.
-The CUDA helper captures every key before timing. A service measurement is valid
-only after warmup has emitted all expected capture markers and no new capture
-marker appears inside a measured run.
-
-The definitive replay marker is:
+The fixed probation threshold is eight observations per full exact key. The
+counter update is protected by the existing cache lock:
 
 ```text
-ASR audio post-pack suffix CUDA graph replay active for M=<rows> and <n> sequences
+observations 1-7 -> identical eager suffix
+observation 8    -> capture and bitwise admission exactly once
+observation 9+   -> admitted graph replay
 ```
+
+The eighth call performs three eager side-stream warmups, captures the exact
+eager suffix callable, then runs both eager and graph replay on the same input.
+The entry is admitted only when the outputs are bitwise equal. Capture failure
+or any mismatch permanently rejects that exact key for the process and returns
+the eager output. The capture call itself also returns the independently
+allocated eager result; graph-owned stable output is exposed only internally
+and is cloned before every later exact-key return. The lock stays held through
+observation-eight capture and admission, so simultaneous eighth calls cannot
+capture the same key twice.
+
+`torch.equal` is used only for observation-eight admission and therefore
+synchronizes only that cold capture call. Admitted replay calls do not compare
+or synchronize. The CUDA helper advances every key through probation before
+timing. A service measurement is valid only after warmup has emitted all
+expected capture markers and no new capture marker appears inside a measured
+run.
+
+Probation logs include the full `cu_seqlens` tuple, exact observation count, and
+current graph-cache occupancy. Admission logs add cold-path wall-clock capture
+duration and start the cumulative replay counter at zero. Replay logs emit
+power-of-two milestones for the per-key cumulative replay count:
+
+```text
+Audio suffix CUDA graph probation uses eager suffix cu_seqlens=<tuple> observation=<n>/8 occupancy=<n>/7
+Captured bitwise-exact audio suffix CUDA graph cu_seqlens=<tuple> observation=8/8 occupancy=<n>/7 capture_duration_ms=<ms> cumulative_replays=0
+ASR audio post-pack suffix CUDA graph replay active cu_seqlens=<tuple> observation=8/8 cumulative_replays=<n>
+```
+
+No per-replay CUDA duration is collected in the service hot path. PyTorch CUDA
+event elapsed-time reporting requires completed events, so collecting it inline
+would add synchronization or a deferred-event queue. The exact replay counter
+requires neither and remains protected by the existing per-entry enqueue lock.
 
 The earlier `opt/mm-encoder-cudagraph` branch is negative protocol evidence
 only. It enabled vLLM's broad `cudagraph_mm_encoder` setting and measured
@@ -162,7 +185,9 @@ rtk env \
 The helper instantiates the exact 24-layer, 1024-wide, 16-head, 2048-output
 Qwen3-ASR audio architecture with synthetic BF16 weights. Its defaults cover
 all seven whitelisted row counts; pass additional three-segment cases with the
-same sum to test different `cu_seqlens` contents. For every case it requires:
+same sum to test different `cu_seqlens` contents. It explicitly requires no
+entry after observations one through seven and exactly one new entry on
+observation eight. For every admitted case it then requires:
 
 - eager versus graph replay bitwise equality on a fresh input;
 - exact CUDA suffix kernel-name ordering, excluding the required graph input

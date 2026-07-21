@@ -121,9 +121,8 @@ class _PrefixGraphEntry:
     static_pack_metadata: torch.Tensor
     graph: Any
     output: torch.Tensor
-    replay_stream: Any
+    execution_stream: Any
     done_event: Any
-    lock: threading.Lock
 
 
 def audio_prefix_cudagraph_enabled() -> bool:
@@ -456,32 +455,43 @@ class _TorchCudaGraphBackend:
     ) -> torch.Tensor:
         return async_tensor_h2d(metadata_cpu, dtype=torch.int32, device=device)
 
+    def create_shared_capture_resources(
+        self,
+        device: torch.device,
+    ) -> tuple[Any, Any]:
+        with torch.cuda.device(device):
+            execution_stream = torch.cuda.Stream(device=device)
+            graph_pool = torch.cuda.graph_pool_handle()
+        return execution_stream, graph_pool
+
     def capture(
         self,
         function: Callable[[], torch.Tensor],
         *,
         device: torch.device,
         warmup_iterations: int,
+        execution_stream: Any,
+        graph_pool: Any,
     ) -> tuple[Any, torch.Tensor, Any, Any]:
         caller_stream = torch.cuda.current_stream(device)
-        replay_stream = torch.cuda.Stream(device=device)
-        replay_stream.wait_stream(caller_stream)
-        with torch.cuda.stream(replay_stream):
+        execution_stream.wait_stream(caller_stream)
+        with torch.cuda.stream(execution_stream):
             for _ in range(warmup_iterations):
                 function()
-        caller_stream.wait_stream(replay_stream)
+        caller_stream.wait_stream(execution_stream)
 
         graph = torch.cuda.CUDAGraph()
         with torch.cuda.graph(
             graph,
-            stream=replay_stream,
+            pool=graph_pool,
+            stream=execution_stream,
             capture_error_mode="thread_local",
         ):
             output = function()
         done_event = torch.cuda.Event(blocking=False)
-        done_event.record(replay_stream)
+        done_event.record(execution_stream)
         caller_stream.wait_event(done_event)
-        return graph, output, replay_stream, done_event
+        return graph, output, execution_stream, done_event
 
     def replay_context(self, replay_stream: Any) -> Any:
         return torch.cuda.stream(replay_stream)
@@ -504,19 +514,19 @@ class _TorchCudaGraphBackend:
         padded_feature: torch.Tensor,
     ) -> torch.Tensor:
         caller_stream = torch.cuda.current_stream(padded_feature.device)
-        replay_stream = entry.replay_stream
+        execution_stream = entry.execution_stream
 
-        replay_stream.wait_stream(caller_stream)
-        with torch.cuda.stream(replay_stream):
+        execution_stream.wait_stream(caller_stream)
+        with torch.cuda.stream(execution_stream):
             entry.static_padded_feature.copy_(
                 padded_feature,
                 non_blocking=True,
             )
             # The asynchronous copy may outlive the caller's Python reference.
-            padded_feature.record_stream(replay_stream)
+            padded_feature.record_stream(execution_stream)
             entry.graph.replay()
             output = entry.output.clone()
-            entry.done_event.record(replay_stream)
+            entry.done_event.record(execution_stream)
 
         caller_stream.wait_event(entry.done_event)
         # Keep clone storage live through its asynchronous caller-stream use.
@@ -552,7 +562,16 @@ class ExactShapeAudioPrefixGraphCache:
         self._admitted_keys: set[PrefixGraphKey] = set()
         self._rejected_keys: set[PrefixGraphKey] = set()
         self._probation_counts: dict[PrefixGraphKey, int] = {}
+        self._execution_stream: Any | None = None
+        self._graph_pool: Any | None = None
+        # Cache state remains locked through cold admission so two eighth
+        # observations cannot capture or alias-admit the same full key twice.
         self._global_lock = threading.Lock()
+        # Every signature graph shares one private pool and one stream. Capture,
+        # alias admission replay, and hot replay must therefore be mutually
+        # exclusive. Enqueueing each complete copy -> graph -> clone transaction
+        # under this lock also preserves clone-before-next-input FIFO ordering.
+        self._transaction_lock = threading.Lock()
         self._logged_capacity = False
         self._logged_probation_capacity = False
         self._logged_replay = False
@@ -729,7 +748,7 @@ class ExactShapeAudioPrefixGraphCache:
                 async_tensor_h2d,
             )
 
-        with replay_entry.lock:
+        with self._transaction_lock:
             output = self._backend.replay_and_clone(
                 replay_entry,
                 padded_feature,
@@ -743,6 +762,21 @@ class ExactShapeAudioPrefixGraphCache:
             self._logged_replay = True
         return output
 
+    def _shared_capture_resources_locked(
+        self,
+        device: torch.device,
+    ) -> tuple[Any, Any]:
+        """Create one stream/private pool while the transaction lock is held."""
+        if self._execution_stream is None and self._graph_pool is None:
+            execution_stream, graph_pool = (
+                self._backend.create_shared_capture_resources(device)
+            )
+            self._execution_stream = execution_stream
+            self._graph_pool = graph_pool
+        elif self._execution_stream is None or self._graph_pool is None:
+            raise RuntimeError("Audio prefix graph capture state is incomplete")
+        return self._execution_stream, self._graph_pool
+
     def _admit_existing_entry_locked(
         self,
         encoder: Any,
@@ -753,7 +787,29 @@ class ExactShapeAudioPrefixGraphCache:
         entry: _PrefixGraphEntry,
         async_tensor_h2d: Any,
     ) -> torch.Tensor | None:
-        """Bitwise-gate one full key onto an existing static signature."""
+        """Gate one alias while ``self._global_lock`` is held."""
+        with self._transaction_lock:
+            return self._admit_existing_entry_transaction_locked(
+                encoder,
+                padded_feature,
+                chunk_lengths_cpu,
+                pack_metadata_cpu,
+                key,
+                entry,
+                async_tensor_h2d,
+            )
+
+    def _admit_existing_entry_transaction_locked(
+        self,
+        encoder: Any,
+        padded_feature: torch.Tensor,
+        chunk_lengths_cpu: torch.Tensor,
+        pack_metadata_cpu: torch.Tensor,
+        key: PrefixGraphKey,
+        entry: _PrefixGraphEntry,
+        async_tensor_h2d: Any,
+    ) -> torch.Tensor | None:
+        """Bitwise-gate a full key while both cache locks are held."""
         reference_output: torch.Tensor | None = None
         try:
             reference_output = self._eager(
@@ -766,11 +822,10 @@ class ExactShapeAudioPrefixGraphCache:
                 key.aftercnn_lens_values,
                 async_tensor_h2d,
             )
-            with entry.lock:
-                candidate_output = self._backend.replay_and_clone(
-                    entry,
-                    padded_feature,
-                )
+            candidate_output = self._backend.replay_and_clone(
+                entry,
+                padded_feature,
+            )
             if not self._backend.equal(candidate_output, reference_output):
                 raise RuntimeError(
                     "Shared audio prefix graph is not bitwise exact"
@@ -813,6 +868,28 @@ class ExactShapeAudioPrefixGraphCache:
         async_tensor_h2d: Any,
     ) -> tuple[_PrefixGraphEntry | None, torch.Tensor | None]:
         """Capture one signature while ``self._global_lock`` is held."""
+        with self._transaction_lock:
+            return self._capture_entry_transaction_locked(
+                encoder,
+                padded_feature,
+                chunk_lengths_cpu,
+                pack_metadata_cpu,
+                key,
+                signature,
+                async_tensor_h2d,
+            )
+
+    def _capture_entry_transaction_locked(
+        self,
+        encoder: Any,
+        padded_feature: torch.Tensor,
+        chunk_lengths_cpu: torch.Tensor,
+        pack_metadata_cpu: torch.Tensor,
+        key: PrefixGraphKey,
+        signature: PrefixGraphSignature,
+        async_tensor_h2d: Any,
+    ) -> tuple[_PrefixGraphEntry | None, torch.Tensor | None]:
+        """Capture one signature while both cache locks are held."""
         reference_output: torch.Tensor | None = None
         try:
             static_padded_feature = torch.empty_strided(
@@ -836,11 +913,18 @@ class ExactShapeAudioPrefixGraphCache:
                     total_rows=signature.packed_rows,
                 )
 
-            graph, graph_output, replay_stream, done_event = self._backend.capture(
+            execution_stream, graph_pool = self._shared_capture_resources_locked(
+                padded_feature.device
+            )
+            graph, graph_output, captured_stream, done_event = self._backend.capture(
                 static_prefix,
                 device=padded_feature.device,
                 warmup_iterations=self._warmup_iterations,
+                execution_stream=execution_stream,
+                graph_pool=graph_pool,
             )
+            if captured_stream is not execution_stream:
+                raise RuntimeError("Audio prefix graph used a non-shared stream")
             if not _output_is_supported(graph_output, signature):
                 raise RuntimeError("Captured audio prefix did not return [M, 1024]")
 
@@ -856,11 +940,11 @@ class ExactShapeAudioPrefixGraphCache:
             )
             if not _output_is_supported(reference_output, key):
                 raise RuntimeError("Eager audio prefix did not return [M, 1024]")
-            self._backend.wait_stream(replay_stream, padded_feature.device)
-            with self._backend.replay_context(replay_stream):
+            self._backend.wait_stream(captured_stream, padded_feature.device)
+            with self._backend.replay_context(captured_stream):
                 static_padded_feature.copy_(padded_feature, non_blocking=True)
                 self._backend.replay(graph)
-                self._backend.record_done(done_event, replay_stream)
+                self._backend.record_done(done_event, captured_stream)
             self._backend.wait_done(done_event, padded_feature.device)
             if not self._backend.equal(graph_output, reference_output):
                 raise RuntimeError("Captured audio prefix is not bitwise exact")
@@ -871,9 +955,8 @@ class ExactShapeAudioPrefixGraphCache:
                 static_pack_metadata=static_pack_metadata,
                 graph=graph,
                 output=graph_output,
-                replay_stream=replay_stream,
+                execution_stream=captured_stream,
                 done_event=done_event,
-                lock=threading.Lock(),
             )
             self._entries[signature] = entry
             self._admitted_keys.add(key)
@@ -922,18 +1005,32 @@ class _NoopPrefixBackend:
         del async_tensor_h2d
         return metadata_cpu.to(device=device)
 
+    def create_shared_capture_resources(
+        self,
+        device: torch.device,
+    ) -> tuple[Any, Any]:
+        del device
+        return object(), object()
+
     def capture(
         self,
         function: Callable[[], torch.Tensor],
         *,
         device: torch.device,
         warmup_iterations: int,
+        execution_stream: Any,
+        graph_pool: Any,
     ) -> tuple[Any, torch.Tensor, Any, Any]:
-        del device
+        del device, graph_pool
         for _ in range(warmup_iterations):
             function()
         output = function()
-        return {"function": function, "output": output}, output, object(), object()
+        return (
+            {"function": function, "output": output},
+            output,
+            execution_stream,
+            object(),
+        )
 
     def replay_context(self, replay_stream: Any) -> Any:
         del replay_stream

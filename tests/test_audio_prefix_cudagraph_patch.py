@@ -82,9 +82,24 @@ class _CountingPrefixBackend(_NoopPrefixBackend):
     def __init__(self) -> None:
         self.capture_calls = 0
         self.replay_calls = 0
+        self.shared_resource_calls = 0
+        self.execution_stream = object()
+        self.graph_pool = object()
+        self.capture_streams = []
+        self.capture_pools = []
+        self._state_lock = threading.Lock()
+
+    def create_shared_capture_resources(self, device):
+        del device
+        with self._state_lock:
+            self.shared_resource_calls += 1
+        return self.execution_stream, self.graph_pool
 
     def capture(self, *args, **kwargs):
-        self.capture_calls += 1
+        with self._state_lock:
+            self.capture_calls += 1
+            self.capture_streams.append(kwargs["execution_stream"])
+            self.capture_pools.append(kwargs["graph_pool"])
         return super().capture(*args, **kwargs)
 
     def replay(self, graph) -> None:
@@ -93,9 +108,10 @@ class _CountingPrefixBackend(_NoopPrefixBackend):
 
 
 class _TrackingReplayBackend(_NoopPrefixBackend):
-    def __init__(self) -> None:
+    def __init__(self, transaction_delay: float = 0.01) -> None:
         self.active_transactions = 0
         self.max_active_transactions = 0
+        self.transaction_delay = transaction_delay
         self._state_lock = threading.Lock()
 
     def replay_and_clone(self, entry, padded_feature):
@@ -106,7 +122,7 @@ class _TrackingReplayBackend(_NoopPrefixBackend):
                 self.active_transactions,
             )
         try:
-            time.sleep(0.01)
+            time.sleep(self.transaction_delay)
             return super().replay_and_clone(entry, padded_feature)
         finally:
             with self._state_lock:
@@ -485,6 +501,47 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         self.assertEqual(cache.probation_key_count, 0)
         self.assertEqual(backend.capture_calls, 1)
 
+    def test_distinct_signatures_share_one_execution_stream_and_pool(self) -> None:
+        encoder = _encoder()
+        backend = _CountingPrefixBackend()
+        cache = ExactShapeAudioPrefixGraphCache(
+            backend=backend,
+            max_entries=2,
+            warmup_iterations=1,
+        )
+        feature_lengths = tuple(
+            _natural_feature_lengths_for_rows(rows)[-1]
+            for rows in (377, 378)
+        )
+
+        with torch.inference_mode():
+            for seed, feature_length in enumerate(feature_lengths, start=30):
+                padded = _natural_padded(feature_length, seed=seed)
+                metadata = _natural_metadata(feature_length)
+                for _ in range(_PROBATION_OBSERVATIONS):
+                    cache.run(
+                        encoder,
+                        padded,
+                        *metadata,
+                        async_tensor_h2d=None,
+                    )
+
+        self.assertEqual(cache.entry_count, 2)
+        self.assertEqual(backend.capture_calls, 2)
+        self.assertEqual(backend.shared_resource_calls, 1)
+        self.assertEqual(
+            backend.capture_streams,
+            [backend.execution_stream, backend.execution_stream],
+        )
+        self.assertEqual(
+            backend.capture_pools,
+            [backend.graph_pool, backend.graph_pool],
+        )
+        self.assertEqual(
+            {entry.execution_stream for entry in cache._entries.values()},
+            {backend.execution_stream},
+        )
+
     def test_graph_entries_and_probation_do_not_evict(self) -> None:
         encoder = _encoder()
         cache = ExactShapeAudioPrefixGraphCache(
@@ -621,7 +678,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         graph_output = _FakeTensor("graph_output")
         clone = _FakeTensor("clone")
         entry = SimpleNamespace(
-            replay_stream=replay_stream,
+            execution_stream=replay_stream,
             static_padded_feature=static_padded_feature,
             graph=_FakeGraph(),
             output=graph_output,
@@ -824,6 +881,65 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
 
         self.assertEqual(cache.entry_count, 1)
         self.assertFalse(torch.equal(left, right))
+        self.assertEqual(backend.max_active_transactions, 1)
+
+    def test_two_thread_cross_signature_replay_is_serialized_and_exact(self) -> None:
+        encoder = _encoder()
+        backend = _TrackingReplayBackend(transaction_delay=0.01)
+        cache = ExactShapeAudioPrefixGraphCache(
+            backend=backend,
+            max_entries=2,
+            warmup_iterations=1,
+        )
+        feature_lengths = tuple(
+            _natural_feature_lengths_for_rows(rows)[-1]
+            for rows in (377, 378)
+        )
+        metadata = tuple(
+            _natural_metadata(feature_length)
+            for feature_length in feature_lengths
+        )
+        with torch.inference_mode():
+            for index, (feature_length, values) in enumerate(
+                zip(feature_lengths, metadata, strict=True)
+            ):
+                padded = _natural_padded(feature_length, seed=40 + index)
+                for _ in range(_PROBATION_OBSERVATIONS):
+                    cache.run(
+                        encoder,
+                        padded,
+                        *values,
+                        async_tensor_h2d=None,
+                    )
+
+        self.assertEqual(cache.entry_count, 2)
+        backend.max_active_transactions = 0
+        barrier = threading.Barrier(2)
+
+        def run(index: int) -> torch.Tensor:
+            padded = _natural_padded(feature_lengths[index], seed=50 + index)
+            with torch.inference_mode():
+                barrier.wait()
+                output = cache.run(
+                    encoder,
+                    padded,
+                    *metadata[index],
+                    async_tensor_h2d=None,
+                )
+                reference = run_audio_prefix_eager(
+                    encoder,
+                    padded,
+                    *metadata[index],
+                    async_tensor_h2d=None,
+                )
+            self.assertTrue(torch.equal(output, reference))
+            return output
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            left, right = list(executor.map(run, (0, 1)))
+
+        self.assertFalse(torch.equal(left, right))
+        self.assertNotEqual(left.data_ptr(), right.data_ptr())
         self.assertEqual(backend.max_active_transactions, 1)
 
 

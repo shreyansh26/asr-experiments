@@ -1,12 +1,11 @@
-# Natural-hotset audio prefix CUDA graphs
+# Natural-hotset audio prefix CUDA graphs with a shared pool
 
-Branch: `opt3/audio-prefix-cudagraph-natural-hotset`
+Branch: `opt4/audio-prefix-cudagraph-natural-shared`
 
-Base: hardened prefix commit `386cadb`, on accepted CPU-metadata commit
-`10bbc1c`.
+Base: natural-hotset prefix commit `52e81c3`.
 
 No PyTorch, vLLM, Triton, or other dependency version changed. This branch has
-not run a vLLM service benchmark.
+not run a GPU helper or vLLM service benchmark.
 
 ## Workload target
 
@@ -109,12 +108,23 @@ observed state. Explicit retained tensor storage is approximately 20.7 MiB for
 14 natural signatures, versus approximately 154.0 MiB for 104 separate graphs;
 CUDA graph private pools and convolution workspaces are additional.
 
-Allocator and concurrency behavior remains the hardened `386cadb` contract:
-each signature owns stable input/metadata/output buffers, a replay stream, an
-event, and a host lock. Input and returned clone storage use `record_stream`.
-Two callers serialize the shared `copy -> graph -> clone` transaction without
-a device-wide synchronization, and every returned `[M,1024]` tensor owns
-independent storage.
+Each signature owns stable input/metadata/output buffers and an event. The cache
+now creates one execution stream and one `torch.cuda.graph_pool_handle()` lazily
+on the first capture, then supplies that identical stream and pool to every
+signature capture. Because graph-private allocations may be reused across
+captures from the shared pool, one cache-wide transaction lock covers capture,
+alias-admission replay, and hot replay across all signatures. Different graphs
+therefore never execute concurrently.
+
+Every transaction enqueues `input copy -> graph replay -> output clone` in FIFO
+order before releasing the lock. The clone is created before any later replay
+can overwrite shared graph storage, every returned `[M,1024]` tensor owns
+independent storage, and input/clone allocator lifetimes remain protected with
+`record_stream`. No device-wide synchronization was added.
+
+The parent implementation retained 5906 MiB after capturing all 14 signatures.
+Reducing that graph-pool reservation is the purpose of this branch, but the
+reduction remains unproven until the same GPU helper is rerun.
 
 ## Validation
 
@@ -128,11 +138,11 @@ rtk env \
 
 The focused suite enumerates all 104 natural keys and 14 signatures, rejects
 altered/multi-audio metadata, verifies observation-eight admission and shared
-signature aliasing, checks no-eviction capacity behavior, and covers allocator
-lifetime plus two-thread replay serialization.
+signature aliasing, checks no-eviction capacity behavior, asserts that distinct
+signatures receive the identical stream/pool objects, and covers allocator
+lifetime plus same-key and cross-signature two-thread replay serialization.
 
-All-natural-row gate (run on free physical GPU1 because GPU0 belonged to an
-unrelated user):
+Future all-natural-row GPU gate:
 
 ```bash
 rtk env \
@@ -159,9 +169,10 @@ Required final marker:
 gate=PASS_EXACT_NATURAL_AUDIO_PREFIX_CUDAGRAPH
 ```
 
-### 2026-07-20 gate result
+### Parent-branch 2026-07-20 baseline
 
-The command above passed on SM90 for all 14 rows:
+Before shared-pool changes, commit `52e81c3` passed the command above on SM90
+for all 14 rows:
 
 - both endpoint feature-length keys per row passed bitwise admission and fresh
   repeated replay, for 28 admitted exact keys on 14 graph signatures;
@@ -182,3 +193,7 @@ fell from a 358.873 us mean to 117.131 us (`67.36%` lower); per-row host
 speedup was `164.7%..227.7%` under the helper's `eager/replay - 1` convention.
 Service latency must decide whether reduced host launch overhead outweighs the
 small extra copy/clone GPU cost.
+
+Those numbers are a comparison baseline only. They do not validate this
+shared-pool branch, and no memory, exactness, concurrency, or timing improvement
+is claimed here until a new GPU gate passes.

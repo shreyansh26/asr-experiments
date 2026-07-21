@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 import sys
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
@@ -16,9 +17,11 @@ sys.path.insert(0, str(PATCH_DIR))
 from audio_cpu_metadata_pack_patch import (  # noqa: E402
     ENV_NAME,
     MAX_SEQLEN_ENV_NAME,
+    _EXPECTED_VLLM_VERSION,
+    _EXPECTED_VLLM_WHEEL_HASH,
     _build_cpu_metadata,
     _expected_audio_output_lengths,
-    _installed_sources_are_supported,
+    _installed_vllm_wheel_is_supported,
     _make_cpu_field_config,
     _make_patched_forward,
     audio_cpu_metadata_pack_enabled,
@@ -159,18 +162,16 @@ class AudioCpuMetadataPackPatchTest(unittest.TestCase):
         self.assertIs(seen["args"][1], feature_lens)
         self.assertIs(seen["args"][2], aftercnn_lens)
 
-    def test_current_installed_sources_match_exact_guard(self) -> None:
-        from vllm.model_executor.models import qwen3_asr
-        from vllm.model_executor.models.qwen3_asr import (
-            Qwen3OmniMoeAudioEncoder,
-        )
+    def test_current_installed_vllm_wheel_matches_guard(self) -> None:
+        self.assertTrue(_installed_vllm_wheel_is_supported())
 
-        self.assertTrue(
-            _installed_sources_are_supported(
-                Qwen3OmniMoeAudioEncoder,
-                qwen3_asr,
-            )
-        )
+    def test_vllm_version_drift_is_rejected(self) -> None:
+        distribution = SimpleNamespace(version="0.0.0")
+        with patch(
+            "audio_cpu_metadata_pack_patch.importlib_metadata.distribution",
+            return_value=distribution,
+        ):
+            self.assertFalse(_installed_vllm_wheel_is_supported())
 
     def test_missing_max_seqlen_prerequisite_does_not_patch(self) -> None:
         from vllm.model_executor.models import qwen3_asr
@@ -187,23 +188,44 @@ class AudioCpuMetadataPackPatchTest(unittest.TestCase):
         self.assertIs(qwen3_asr._qwen3asr_field_config, original_field_config)
         self.assertNotIn(MAX_SEQLEN_ENV_NAME, os.environ)
 
-    def test_source_drift_is_rejected(self) -> None:
-        model_cls = type(
-            "Qwen3OmniMoeAudioEncoder",
-            (),
-            {"forward": lambda self: None},
-        )
-        model_cls.__module__ = "vllm.model_executor.models.qwen3_omni_moe_thinker"
-        fake_module = SimpleNamespace(
-            __name__="vllm.model_executor.models.qwen3_asr",
-            _qwen3asr_field_config=lambda inputs: inputs,
-            Qwen3ASRForConditionalGeneration=SimpleNamespace(
-                _process_audio_input=lambda self: None
+    def test_wheel_hash_drift_is_rejected(self) -> None:
+        wheel_url = "https://example.invalid/vllm.whl"
+        distribution = SimpleNamespace(
+            version=_EXPECTED_VLLM_VERSION,
+            read_text=lambda name: (
+                '{"url": "' + wheel_url + '"}'
+                if name == "direct_url.json"
+                else None
             ),
         )
-        self.assertFalse(_installed_sources_are_supported(model_cls, fake_module))
+        with TemporaryDirectory() as temp_dir:
+            lock_path = Path(temp_dir) / "uv.lock"
+            lock_path.write_text(
+                "\n".join(
+                    (
+                        "[[package]]",
+                        'name = "vllm"',
+                        f'version = "{_EXPECTED_VLLM_VERSION}"',
+                        "wheels = [",
+                        "  { "
+                        f'url = "{wheel_url}", '
+                        'hash = "sha256:not-the-expected-wheel" '
+                        "},",
+                        "]",
+                    )
+                )
+            )
+            with patch(
+                "audio_cpu_metadata_pack_patch.importlib_metadata.distribution",
+                return_value=distribution,
+            ):
+                self.assertFalse(
+                    _installed_vllm_wheel_is_supported(_lock_path=lock_path)
+                )
 
-    def test_source_drift_does_not_install_max_seqlen_prerequisite(self) -> None:
+        self.assertTrue(_EXPECTED_VLLM_WHEEL_HASH.startswith("sha256:"))
+
+    def test_wheel_mismatch_does_not_install_max_seqlen_prerequisite(self) -> None:
         with (
             patch.dict(
                 os.environ,
@@ -211,7 +233,7 @@ class AudioCpuMetadataPackPatchTest(unittest.TestCase):
                 clear=True,
             ),
             patch(
-                "audio_cpu_metadata_pack_patch._installed_sources_are_supported",
+                "audio_cpu_metadata_pack_patch._installed_vllm_wheel_is_supported",
                 return_value=False,
             ),
             patch(

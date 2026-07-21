@@ -2,11 +2,16 @@
 
 ## Status
 
-This is a CPU-ready, CUDA-unvalidated research candidate on branch
-`opt4/audio-suffix-cudagraph-bucketed`, derived from natural-hotset commit
-`e8309e062ef04cf56dd265e10e60aa4088605504`. No GPU helper, service benchmark,
-or CER/WER run has been performed. Do not treat it as a winner until every GPU
-and service gate below passes.
+The original candidate was developed on branch
+`opt4/audio-suffix-cudagraph-bucketed` and later integrated into selected
+round-four branch `opt5/audio-prefix-shared-suffix-bucketed`.
+
+Follow-up branch `opt6/audio-tail-rows-263-271` expands the tail family to
+`M=263..273`. On 2026-07-21, GPU1 passed all 25 exact suffix keys with bitwise
+equality, identical 268-kernel bucket order, alternating retained-output
+checks, and two-thread/two-stream concurrency. End-to-end service and CER/WER
+validation of the expanded family remain pending, so do not promote the
+follow-up from helper evidence alone.
 
 No PyTorch, vLLM, Triton, or other dependency version changed.
 
@@ -36,11 +41,12 @@ must still pass the GPU bitwise gate before this experiment is usable.
 
 ## Exact requests and two graph buckets
 
-Only the same 21 canonical runtime keys are considered:
+The follow-up `opt6/audio-tail-rows-263-271` branch considers 25 canonical
+runtime keys:
 
 ```text
-tail family (7 exact keys):
-  M in {264, 265, 267, 268, 270, 272, 273}
+tail family (11 exact keys):
+  M in {263, ..., 273}
   runtime cu_seqlens == (0, 104, 208, M)
 
 natural family (14 exact keys):
@@ -73,7 +79,7 @@ natural M=390: (0, 104, 208, 312, 390, 390)
 ```
 
 The graph topology and metadata tensor length are fixed within each family.
-Only the runtime prefix values change. The padding segment length is at most 9
+Only the runtime prefix values change. The padding segment length is at most 10
 rows for the tail graph and 13 rows for the natural graph, so `max_seqlen=104`
 remains a valid upper bound.
 
@@ -152,9 +158,9 @@ during cold exact-key admission; admitted hot replays do not compare.
 Expected logs distinguish bucket capture from exact admission:
 
 ```text
-Bucketed audio suffix CUDA graph probation uses eager suffix cu_seqlens=<runtime> bucket_rows=<273|390> observation=<n>/8 bucket_occupancy=<n>/2 admitted=<n>/21
+Bucketed audio suffix CUDA graph probation uses eager suffix cu_seqlens=<runtime> bucket_rows=<273|390> observation=<n>/8 bucket_occupancy=<n>/2 admitted=<n>/25
 Captured bucketed audio suffix CUDA graph graph_cu_seqlens=<graph tuple> bucket_rows=<273|390> observation=8/8 bucket_occupancy=<n>/2 capture_duration_ms=<ms> cumulative_replays=0
-Admitted bitwise-exact bucketed audio suffix cu_seqlens=<runtime> graph_cu_seqlens=<graph tuple> bucket_rows=<273|390> observation=8/8 admitted=<n>/21
+Admitted bitwise-exact bucketed audio suffix cu_seqlens=<runtime> graph_cu_seqlens=<graph tuple> bucket_rows=<273|390> observation=8/8 admitted=<n>/25
 ASR bucketed audio suffix CUDA graph replay active cu_seqlens=<runtime> bucket_rows=<273|390> observation=8/8 bucket_cumulative_replays=<n>
 ```
 
@@ -195,11 +201,11 @@ rtk env \
     --master-port <free-port>
 ```
 
-The default helper covers all 21 exact keys. It requires:
+The default helper covers all 25 exact keys. It requires:
 
 - observations one through seven to remain eager for every exact key;
 - every exact M to pass unpadded-eager versus bucket-replay bitwise equality;
-- exactly two captures and 21 exact admissions;
+- exactly two captures and 25 exact admissions;
 - both maximum-row duplicate-endpoint cases to pass;
 - bucket-eager versus captured-graph CUDA kernel ordering to match;
 - replay timings to include hidden-prefix copy, metadata-prefix copy, graph
@@ -217,13 +223,13 @@ concurrent_cross_key_gate=PASS keys=2 threads=2 streams=2 ...
 gate=PASS_BUCKETED_AUDIO_SUFFIX_CUDAGRAPH
 ```
 
-No service benchmark is valid unless all 21 admissions complete before the
+No service benchmark is valid unless all 25 admissions complete before the
 measured interval and no capture, rejection, or capacity warning appears during
 measurement.
 
 ## Promotion gate
 
-1. Pass the all-21 CUDA helper, including duplicate endpoints, exact admission,
+1. Pass the all-25 CUDA helper, including duplicate endpoints, exact admission,
    alternating ownership, and cross-key concurrency.
 2. Run adjacent accepted/candidate/accepted B16 controls on one GPU and confirm
    two bucket captures plus all observed exact admissions before measurement.

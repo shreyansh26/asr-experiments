@@ -30,12 +30,11 @@ _EXPECTED_LAYER_COUNT = 24
 _INPUT_WIDTH = 1024
 _OUTPUT_WIDTH = 2048
 _EXPECTED_MAX_SEQLEN = 104
-_TAIL_ROWS = frozenset({264, 265, 267, 268, 270, 272, 273})
+_TAIL_ROWS = frozenset()
 _NATURAL_FULL_CHUNK_ROWS = frozenset(range(377, 391))
-_SUPPORTED_ROWS = _TAIL_ROWS | _NATURAL_FULL_CHUNK_ROWS
-_TAIL_BUCKET_ROWS = 273
+_SUPPORTED_ROWS = _NATURAL_FULL_CHUNK_ROWS
 _NATURAL_BUCKET_ROWS = 390
-_MAX_CACHE_ENTRIES = 2
+_MAX_CACHE_ENTRIES = 1
 _WARMUP_ITERATIONS = 3
 _PROBATION_OBSERVATIONS = 8
 
@@ -90,16 +89,12 @@ def audio_suffix_cudagraph_enabled() -> bool:
 
 
 def _canonical_cu_seqlens_values(rows: int) -> tuple[int, ...] | None:
-    if rows in _TAIL_ROWS:
-        return (0, 104, 208, rows)
     if rows in _NATURAL_FULL_CHUNK_ROWS:
         return (0, 104, 208, 312, rows)
     return None
 
 
 def _bucket_rows(rows: int) -> int | None:
-    if rows in _TAIL_ROWS:
-        return _TAIL_BUCKET_ROWS
     if rows in _NATURAL_FULL_CHUNK_ROWS:
         return _NATURAL_BUCKET_ROWS
     return None

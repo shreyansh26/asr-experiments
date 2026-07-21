@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate two exact-admitted row-bucket graphs for the audio suffix on CUDA."""
+"""Gate the natural-audio row-bucket graph for the audio suffix on CUDA."""
 
 from __future__ import annotations
 
@@ -383,7 +383,7 @@ def _main() -> None:
         type=_parse_segments,
         help=(
             "Comma-separated exact sequence lengths. Repeat for every observed "
-            "key. Defaults cover all 21 exact keys in both row buckets."
+            "key. Defaults cover all 25 exact keys in both row buckets."
         ),
     )
     parser.add_argument("--warmup", type=int, default=3)
@@ -419,7 +419,7 @@ def _main() -> None:
         for values in case_values
     ):
         raise ValueError(
-            "Expected at most 21 canonical tail/full-chunk exact keys with a "
+            "Expected at most 14 canonical natural-chunk exact keys with a "
             f"supported total row count in {sorted(_SUPPORTED_ROWS)}"
         )
     if len(set(case_values)) != len(case_values):

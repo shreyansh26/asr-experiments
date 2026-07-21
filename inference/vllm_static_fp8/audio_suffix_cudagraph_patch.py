@@ -276,7 +276,7 @@ class _TorchCudaGraphBackend:
 
 
 class ExactShapeAudioSuffixGraphCache:
-    """Share two row-bucket graphs after exact per-request admission."""
+    """Share one natural-row graph after exact per-request admission."""
 
     def __init__(
         self,

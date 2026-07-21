@@ -4,7 +4,13 @@ from pathlib import Path
 
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
-PRECISIONS = ("bf16", "fp8_dynamic", "fp8_static", "fp8_static_qk_prefill")
+PRECISIONS = (
+    "bf16",
+    "fp8_dynamic",
+    "fp8_static",
+    "fp8_static_qk_prefill",
+    "fp8_static_qk_prefill_audio_prefix_suffix_cudagraph",
+)
 FULL_COMPLETED_COUNT = 550
 PARTIAL_AUDIO_LENGTH = 50.0
 
@@ -55,6 +61,8 @@ def precision_for_row(row: dict[str, str]) -> str | None:
     output_root = row.get("output_root", "").lower()
     if "fp8_dynamic" in output_root:
         return "fp8_dynamic"
+    if "fp8_static_qk_prefill_audio_prefix_suffix_cudagraph" in output_root:
+        return "fp8_static_qk_prefill_audio_prefix_suffix_cudagraph"
     if "fp8_static_qk_prefill" in output_root:
         return "fp8_static_qk_prefill"
     if "fp8_static" in output_root:

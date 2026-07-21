@@ -20,6 +20,13 @@ Related documents:
 - [Fused Q/K RMSNorm, MRoPE, and KV-cache update](qk-mrope-kv-cache-fusion.md)
   documents the implementation, dispatch constraints, correctness checks, and
   benchmark results for the fused kernel analyzed here.
+- [Qwen3-ASR audio lengths and CUDA-graph fast-path coverage](qwen3-asr-audio-length-and-graph-fast-path.md)
+  documents the later CPU metadata/Triton pack and natural-only audio
+  prefix/suffix graph caches layered above this decoder path.
+- [Final natural-only audio CUDA-graph benchmark](audio-natural-only-cudagraph-benchmark.md)
+  contains the refreshed end-to-end sequential and batched results. The audio
+  graphs are request-side encoder graphs and are separate from the dominant
+  decoder graph measured in this guide.
 
 ## Executive summary
 

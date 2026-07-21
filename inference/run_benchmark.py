@@ -15,6 +15,7 @@ DEFAULT_INPUT_ROOT = REPO_ROOT / "data" / "prepared_data"
 DEFAULT_MODEL = "Qwen/Qwen3-ASR-1.7B"
 DEFAULT_BASE_URL = "http://localhost:8090/v1"
 DEFAULT_NO_SPEECH_RMS_THRESHOLD = 1
+DEFAULT_WARMUP_FILES = 20
 DEFAULT_WORKERS = 1
 DEFAULT_SEQUENTIAL_OUTPUT_ROOT = (
     REPO_ROOT / "predictions" / "results" / "sequential_predicted"
@@ -35,6 +36,7 @@ CSV_COLUMNS = [
     "base_url",
     "uniform_audio_length",
     "num_files",
+    "warmup_files",
     "no_speech_rms_threshold",
     "warmup_completed",
     "warmup_failed",
@@ -80,6 +82,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--uniform-audio-length", type=float, default=None)
     parser.add_argument("--num-files", type=int, default=None)
+    parser.add_argument("--warmup-files", type=int, default=DEFAULT_WARMUP_FILES)
     parser.add_argument(
         "--no-speech-rms-threshold",
         type=int,
@@ -141,6 +144,7 @@ def build_command(args: argparse.Namespace, output_root: Path) -> list[str]:
         command.extend(["--uniform-audio-length", str(args.uniform_audio_length)])
     if args.num_files is not None:
         command.extend(["--num-files", str(args.num_files)])
+    command.extend(["--warmup-files", str(args.warmup_files)])
     if args.overwrite:
         command.append("--overwrite")
     if args.mode == "batched":
@@ -334,6 +338,7 @@ def main() -> None:
                 "" if args.uniform_audio_length is None else str(args.uniform_audio_length)
             ),
             "num_files": "" if args.num_files is None else str(args.num_files),
+            "warmup_files": str(args.warmup_files),
             "no_speech_rms_threshold": str(args.no_speech_rms_threshold),
             "command": " ".join(command),
             "scoring_command": (

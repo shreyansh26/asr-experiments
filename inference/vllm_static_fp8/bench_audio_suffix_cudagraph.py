@@ -171,7 +171,7 @@ def _cuda_kernel_names(function: Callable[[], object]) -> list[str]:
     ]
 
 
-def main() -> None:
+def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--segments",
@@ -356,6 +356,23 @@ def main() -> None:
             f"expected {len(cases)} exact graph keys, got {cache.entry_count}"
         )
     print("gate=PASS_EXACT_AUDIO_SUFFIX_CUDAGRAPH")
+
+
+def main() -> None:
+    # Direct module construction needs the same config context that vLLM's
+    # production model loader installs around initialization and execution.
+    from vllm.config import VllmConfig, set_current_vllm_config
+    from vllm.distributed import (
+        destroy_distributed_environment,
+        destroy_model_parallel,
+    )
+
+    with set_current_vllm_config(VllmConfig()):
+        try:
+            _main()
+        finally:
+            destroy_model_parallel()
+            destroy_distributed_environment()
 
 
 if __name__ == "__main__":

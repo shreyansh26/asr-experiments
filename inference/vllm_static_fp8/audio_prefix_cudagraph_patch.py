@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
 from contextlib import nullcontext
 from dataclasses import dataclass
 import os
@@ -34,11 +33,19 @@ _INPUT_MELS = 128
 _INPUT_FRAMES = 100
 _PACKED_WIDTH = 1024
 _CONV_OUTPUT_ROWS = 13
-_SUPPORTED_CHUNKS = frozenset({21})
-_SUPPORTED_PACKED_ROWS = frozenset({264, 265, 267, 268, 270, 272, 273})
+_TAIL_PACKED_ROWS = frozenset({264, 265, 267, 268, 270, 272, 273})
+_NATURAL_PACKED_ROWS = frozenset(range(377, 391))
+_SUPPORTED_PACKED_ROWS = _TAIL_PACKED_ROWS | _NATURAL_PACKED_ROWS
+_SUPPORTED_CHUNKS = frozenset({21, 29, 30})
+_NATURAL_FEATURE_LENGTH_MIN = 2897
+_NATURAL_FEATURE_LENGTH_MAX = 3000
 _MAX_CACHE_ENTRIES = len(_SUPPORTED_PACKED_ROWS)
+_MAX_PROBATION_KEYS = (
+    _NATURAL_FEATURE_LENGTH_MAX - _NATURAL_FEATURE_LENGTH_MIN + 1
+    + len(_TAIL_PACKED_ROWS)
+)
 _WARMUP_ITERATIONS = 3
-_CAPTURE_OBSERVATIONS = 8
+_PROBATION_OBSERVATIONS = 8
 
 
 @triton.jit
@@ -94,9 +101,22 @@ class PrefixGraphKey:
     aftercnn_lens_values: tuple[int, ...]
 
 
+@dataclass(frozen=True)
+class PrefixGraphSignature:
+    """State consumed by the captured prefix, after exact-key admission."""
+
+    padded_shape: tuple[int, int, int, int]
+    padded_stride: tuple[int, int, int, int]
+    packed_rows: int
+    dtype: torch.dtype
+    device_type: str
+    device_index: int | None
+    pack_metadata_values: tuple[int, ...]
+
+
 @dataclass
 class _PrefixGraphEntry:
-    key: PrefixGraphKey
+    signature: PrefixGraphSignature
     static_padded_feature: torch.Tensor
     static_pack_metadata: torch.Tensor
     graph: Any
@@ -139,6 +159,94 @@ def _validate_pack_metadata_values(
     return running_offset
 
 
+def _natural_feature_lengths_for_rows(packed_rows: int) -> tuple[int, ...]:
+    """Return every single-audio feature length for one admitted natural row."""
+    if packed_rows not in _NATURAL_PACKED_ROWS:
+        return ()
+    first = max(_NATURAL_FEATURE_LENGTH_MIN, packed_rows * 8 - 123)
+    last = min(_NATURAL_FEATURE_LENGTH_MAX, packed_rows * 8 - 116)
+    return tuple(range(first, last + 1))
+
+
+def _canonical_single_audio_natural_metadata(
+    feature_length: int,
+) -> tuple[
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+] | None:
+    """Derive the exact CPU metadata emitted for one 29--30 s audio."""
+    if not (
+        _NATURAL_FEATURE_LENGTH_MIN
+        <= feature_length
+        <= _NATURAL_FEATURE_LENGTH_MAX
+    ):
+        return None
+
+    full_chunks, tail_frames = divmod(feature_length, _INPUT_FRAMES)
+    chunk_lengths = (_INPUT_FRAMES,) * full_chunks
+    if tail_frames:
+        chunk_lengths += (tail_frames,)
+    pack_lengths = tuple((length + 7) // 8 for length in chunk_lengths)
+    offsets = [0]
+    for length in pack_lengths:
+        offsets.append(offsets[-1] + length)
+    packed_rows = offsets[-1]
+    if packed_rows not in _NATURAL_PACKED_ROWS:
+        return None
+
+    return (
+        chunk_lengths,
+        pack_lengths + tuple(offsets[:-1]),
+        (0, 104, 208, 312, packed_rows),
+        (feature_length,),
+        (packed_rows,),
+    )
+
+
+def _is_canonical_single_audio_natural_key(
+    *,
+    padded_shape: tuple[int, int, int, int],
+    packed_rows: int,
+    chunk_lengths_values: tuple[int, ...],
+    pack_metadata_values: tuple[int, ...],
+    cu_seqlens_values: tuple[int, ...],
+    feature_lens_values: tuple[int, ...],
+    aftercnn_lens_values: tuple[int, ...],
+) -> bool:
+    if len(feature_lens_values) != 1:
+        return False
+    expected = _canonical_single_audio_natural_metadata(
+        feature_lens_values[0]
+    )
+    if expected is None:
+        return False
+    (
+        expected_chunk_lengths,
+        expected_pack_metadata,
+        expected_cu_seqlens,
+        expected_feature_lens,
+        expected_aftercnn_lens,
+    ) = expected
+    return (
+        packed_rows == expected_aftercnn_lens[0]
+        and padded_shape
+        == (
+            len(expected_chunk_lengths),
+            _INPUT_CHANNELS,
+            _INPUT_MELS,
+            _INPUT_FRAMES,
+        )
+        and chunk_lengths_values == expected_chunk_lengths
+        and pack_metadata_values == expected_pack_metadata
+        and cu_seqlens_values == expected_cu_seqlens
+        and feature_lens_values == expected_feature_lens
+        and aftercnn_lens_values == expected_aftercnn_lens
+    )
+
+
 def _make_prefix_graph_key(
     padded_feature: torch.Tensor,
     chunk_lengths_cpu: torch.Tensor,
@@ -170,10 +278,25 @@ def _make_prefix_graph_key(
         pack_metadata_values,
         num_chunks=num_chunks,
     )
+    padded_shape = tuple(int(value) for value in padded_feature.shape)
+    natural_key = _is_canonical_single_audio_natural_key(
+        padded_shape=padded_shape,
+        packed_rows=packed_rows if packed_rows is not None else -1,
+        chunk_lengths_values=chunk_lengths_values,
+        pack_metadata_values=pack_metadata_values,
+        cu_seqlens_values=tuple(int(value) for value in cu_seqlens_values),
+        feature_lens_values=tuple(int(value) for value in feature_lens_values),
+        aftercnn_lens_values=tuple(int(value) for value in aftercnn_lens_values),
+    )
+    tail_key = (
+        packed_rows in _TAIL_PACKED_ROWS
+        and num_chunks == 21
+    )
     if (
         packed_rows is None
         or num_chunks not in _SUPPORTED_CHUNKS
         or packed_rows not in _SUPPORTED_PACKED_ROWS
+        or not (tail_key or natural_key)
         or len(chunk_lengths_values) != num_chunks
         or any(length <= 0 or length > _INPUT_FRAMES for length in chunk_lengths_values)
         or not cu_seqlens_values
@@ -189,7 +312,7 @@ def _make_prefix_graph_key(
         return None
 
     return PrefixGraphKey(
-        padded_shape=tuple(int(value) for value in padded_feature.shape),
+        padded_shape=padded_shape,
         padded_stride=tuple(int(value) for value in padded_feature.stride()),
         packed_rows=packed_rows,
         dtype=padded_feature.dtype,
@@ -203,7 +326,23 @@ def _make_prefix_graph_key(
     )
 
 
-def _output_is_supported(output: Any, key: PrefixGraphKey) -> bool:
+def _make_prefix_graph_signature(key: PrefixGraphKey) -> PrefixGraphSignature:
+    """Reduce a fully admitted runtime key to captured-function inputs only."""
+    return PrefixGraphSignature(
+        padded_shape=key.padded_shape,
+        padded_stride=key.padded_stride,
+        packed_rows=key.packed_rows,
+        dtype=key.dtype,
+        device_type=key.device_type,
+        device_index=key.device_index,
+        pack_metadata_values=key.pack_metadata_values,
+    )
+
+
+def _output_is_supported(
+    output: Any,
+    key: PrefixGraphKey | PrefixGraphSignature,
+) -> bool:
     return (
         isinstance(output, torch.Tensor)
         and output.shape == (key.packed_rows, _PACKED_WIDTH)
@@ -389,31 +528,44 @@ class _TorchCudaGraphBackend:
 
 
 class ExactShapeAudioPrefixGraphCache:
-    """Capture one verified prefix graph per exact padded shape and metadata."""
+    """Admit full metadata keys onto verified graph-static signatures."""
 
     def __init__(
         self,
         *,
         backend: Any | None = None,
         max_entries: int = _MAX_CACHE_ENTRIES,
+        max_probation_keys: int = _MAX_PROBATION_KEYS,
         warmup_iterations: int = _WARMUP_ITERATIONS,
     ) -> None:
-        if max_entries <= 0 or warmup_iterations <= 0:
+        if (
+            max_entries <= 0
+            or max_probation_keys <= 0
+            or warmup_iterations <= 0
+        ):
             raise ValueError("CUDA graph cache limits must be positive")
         self._backend = backend or _TorchCudaGraphBackend()
         self._max_entries = max_entries
+        self._max_probation_keys = max_probation_keys
         self._warmup_iterations = warmup_iterations
-        self._entries: dict[PrefixGraphKey, _PrefixGraphEntry] = {}
+        self._entries: dict[PrefixGraphSignature, _PrefixGraphEntry] = {}
+        self._admitted_keys: set[PrefixGraphKey] = set()
         self._rejected_keys: set[PrefixGraphKey] = set()
-        self._probation_counts: OrderedDict[PrefixGraphKey, int] = OrderedDict()
+        self._probation_counts: dict[PrefixGraphKey, int] = {}
         self._global_lock = threading.Lock()
         self._logged_capacity = False
+        self._logged_probation_capacity = False
         self._logged_replay = False
 
     @property
     def entry_count(self) -> int:
         with self._global_lock:
             return len(self._entries)
+
+    @property
+    def admitted_key_count(self) -> int:
+        with self._global_lock:
+            return len(self._admitted_keys)
 
     @property
     def rejected_count(self) -> int:
@@ -425,15 +577,25 @@ class ExactShapeAudioPrefixGraphCache:
         with self._global_lock:
             return len(self._probation_counts)
 
-    def _observe_key_locked(self, key: PrefixGraphKey) -> bool:
-        observations = self._probation_counts.pop(key, 0) + 1
-        if observations >= _CAPTURE_OBSERVATIONS:
-            return True
-
-        self._probation_counts[key] = observations
-        while len(self._probation_counts) > self._max_entries:
-            self._probation_counts.popitem(last=False)
-        return False
+    def _observe_key_locked(self, key: PrefixGraphKey) -> int:
+        observations = self._probation_counts.get(key)
+        if observations is None:
+            if len(self._probation_counts) >= self._max_probation_keys:
+                if not self._logged_probation_capacity:
+                    logger.warning(
+                        "Audio prefix CUDA graph probation is full at %d "
+                        "exact metadata keys; new keys stay eager",
+                        self._max_probation_keys,
+                    )
+                    self._logged_probation_capacity = True
+                return 0
+            observations = 0
+        observations += 1
+        if observations >= _PROBATION_OBSERVATIONS:
+            self._probation_counts.pop(key, None)
+        else:
+            self._probation_counts[key] = observations
+        return observations
 
     def _eager(
         self,
@@ -496,46 +658,66 @@ class ExactShapeAudioPrefixGraphCache:
                 async_tensor_h2d,
             )
 
-        if key in self._rejected_keys:
-            return self._eager(
-                encoder,
-                padded_feature,
-                chunk_lengths_cpu,
-                pack_metadata_cpu,
-                key.cu_seqlens_values,
-                key.feature_lens_values,
-                key.aftercnn_lens_values,
-                async_tensor_h2d,
-            )
-
+        signature = _make_prefix_graph_signature(key)
         capture_output: torch.Tensor | None = None
+        replay_entry: _PrefixGraphEntry | None = None
         with self._global_lock:
-            entry = self._entries.get(key)
-            if entry is None and key in self._rejected_keys:
-                pass
-            elif entry is None and len(self._entries) < self._max_entries:
-                if self._observe_key_locked(key):
-                    entry, capture_output = self._capture_entry(
-                        encoder,
-                        padded_feature,
-                        chunk_lengths_cpu,
-                        pack_metadata_cpu,
-                        key,
-                        async_tensor_h2d,
-                    )
-            elif entry is None and not self._logged_capacity:
-                self._probation_counts.pop(key, None)
-                logger.warning(
-                    "Audio prefix CUDA graph cache is full at %d exact keys; "
-                    "using eager prefix for shape=%s",
-                    self._max_entries,
-                    key.padded_shape,
-                )
-                self._logged_capacity = True
+            if key not in self._rejected_keys:
+                signature_entry = self._entries.get(signature)
+                if key in self._admitted_keys:
+                    replay_entry = signature_entry
+                elif (
+                    signature_entry is None
+                    and len(self._entries) >= self._max_entries
+                ):
+                    if not self._logged_capacity:
+                        logger.warning(
+                            "Audio prefix CUDA graph cache is full at %d "
+                            "signatures; using eager prefix for shape=%s",
+                            self._max_entries,
+                            key.padded_shape,
+                        )
+                        self._logged_capacity = True
+                else:
+                    observations = self._observe_key_locked(key)
+                    if observations == _PROBATION_OBSERVATIONS:
+                        if signature_entry is None:
+                            _, capture_output = self._capture_entry_locked(
+                                encoder,
+                                padded_feature,
+                                chunk_lengths_cpu,
+                                pack_metadata_cpu,
+                                key,
+                                signature,
+                                async_tensor_h2d,
+                            )
+                        else:
+                            capture_output = self._admit_existing_entry_locked(
+                                encoder,
+                                padded_feature,
+                                chunk_lengths_cpu,
+                                pack_metadata_cpu,
+                                key,
+                                signature_entry,
+                                async_tensor_h2d,
+                            )
+                    elif observations > 0:
+                        logger.info(
+                            "Audio prefix CUDA graph probation uses eager "
+                            "prefix shape=%s rows=%d feature_lens=%s "
+                            "observation=%d/%d signatures=%d/%d",
+                            key.padded_shape,
+                            key.packed_rows,
+                            key.feature_lens_values,
+                            observations,
+                            _PROBATION_OBSERVATIONS,
+                            len(self._entries),
+                            self._max_entries,
+                        )
 
         if capture_output is not None:
             return capture_output
-        if entry is None:
+        if replay_entry is None:
             return self._eager(
                 encoder,
                 padded_feature,
@@ -547,8 +729,11 @@ class ExactShapeAudioPrefixGraphCache:
                 async_tensor_h2d,
             )
 
-        with entry.lock:
-            output = self._backend.replay_and_clone(entry, padded_feature)
+        with replay_entry.lock:
+            output = self._backend.replay_and_clone(
+                replay_entry,
+                padded_feature,
+            )
         if not self._logged_replay:
             logger.info(
                 "ASR audio prefix CUDA graph replay active for shape=%s rows=%d",
@@ -558,20 +743,81 @@ class ExactShapeAudioPrefixGraphCache:
             self._logged_replay = True
         return output
 
-    def _capture_entry(
+    def _admit_existing_entry_locked(
         self,
         encoder: Any,
         padded_feature: torch.Tensor,
         chunk_lengths_cpu: torch.Tensor,
         pack_metadata_cpu: torch.Tensor,
         key: PrefixGraphKey,
+        entry: _PrefixGraphEntry,
+        async_tensor_h2d: Any,
+    ) -> torch.Tensor | None:
+        """Bitwise-gate one full key onto an existing static signature."""
+        reference_output: torch.Tensor | None = None
+        try:
+            reference_output = self._eager(
+                encoder,
+                padded_feature,
+                chunk_lengths_cpu,
+                pack_metadata_cpu,
+                key.cu_seqlens_values,
+                key.feature_lens_values,
+                key.aftercnn_lens_values,
+                async_tensor_h2d,
+            )
+            with entry.lock:
+                candidate_output = self._backend.replay_and_clone(
+                    entry,
+                    padded_feature,
+                )
+            if not self._backend.equal(candidate_output, reference_output):
+                raise RuntimeError(
+                    "Shared audio prefix graph is not bitwise exact"
+                )
+            self._admitted_keys.add(key)
+            logger.info(
+                "Admitted exact audio prefix metadata onto existing CUDA "
+                "graph shape=%s rows=%d feature_lens=%s observation=%d/%d "
+                "signatures=%d/%d admitted_keys=%d",
+                key.padded_shape,
+                key.packed_rows,
+                key.feature_lens_values,
+                _PROBATION_OBSERVATIONS,
+                _PROBATION_OBSERVATIONS,
+                len(self._entries),
+                self._max_entries,
+                len(self._admitted_keys),
+            )
+            return reference_output
+        except Exception as error:
+            self._rejected_keys.add(key)
+            logger.warning(
+                "Audio prefix CUDA graph alias admission failed closed for "
+                "shape=%s rows=%d feature_lens=%s: %s",
+                key.padded_shape,
+                key.packed_rows,
+                key.feature_lens_values,
+                error,
+            )
+            return reference_output
+
+    def _capture_entry_locked(
+        self,
+        encoder: Any,
+        padded_feature: torch.Tensor,
+        chunk_lengths_cpu: torch.Tensor,
+        pack_metadata_cpu: torch.Tensor,
+        key: PrefixGraphKey,
+        signature: PrefixGraphSignature,
         async_tensor_h2d: Any,
     ) -> tuple[_PrefixGraphEntry | None, torch.Tensor | None]:
+        """Capture one signature while ``self._global_lock`` is held."""
         reference_output: torch.Tensor | None = None
         try:
             static_padded_feature = torch.empty_strided(
-                key.padded_shape,
-                key.padded_stride,
+                signature.padded_shape,
+                signature.padded_stride,
                 device=padded_feature.device,
                 dtype=padded_feature.dtype,
             )
@@ -587,7 +833,7 @@ class ExactShapeAudioPrefixGraphCache:
                     encoder,
                     static_padded_feature,
                     static_pack_metadata,
-                    total_rows=key.packed_rows,
+                    total_rows=signature.packed_rows,
                 )
 
             graph, graph_output, replay_stream, done_event = self._backend.capture(
@@ -595,7 +841,7 @@ class ExactShapeAudioPrefixGraphCache:
                 device=padded_feature.device,
                 warmup_iterations=self._warmup_iterations,
             )
-            if not _output_is_supported(graph_output, key):
+            if not _output_is_supported(graph_output, signature):
                 raise RuntimeError("Captured audio prefix did not return [M, 1024]")
 
             reference_output = self._eager(
@@ -620,7 +866,7 @@ class ExactShapeAudioPrefixGraphCache:
                 raise RuntimeError("Captured audio prefix is not bitwise exact")
 
             entry = _PrefixGraphEntry(
-                key=key,
+                signature=signature,
                 static_padded_feature=static_padded_feature,
                 static_pack_metadata=static_pack_metadata,
                 graph=graph,
@@ -629,12 +875,20 @@ class ExactShapeAudioPrefixGraphCache:
                 done_event=done_event,
                 lock=threading.Lock(),
             )
-            self._entries[key] = entry
+            self._entries[signature] = entry
+            self._admitted_keys.add(key)
             logger.info(
-                "Captured bitwise-exact audio prefix CUDA graph for shape=%s "
-                "rows=%d",
+                "Captured bitwise-exact audio prefix CUDA graph shape=%s "
+                "rows=%d feature_lens=%s observation=%d/%d signatures=%d/%d "
+                "admitted_keys=%d",
                 key.padded_shape,
                 key.packed_rows,
+                key.feature_lens_values,
+                _PROBATION_OBSERVATIONS,
+                _PROBATION_OBSERVATIONS,
+                len(self._entries),
+                self._max_entries,
+                len(self._admitted_keys),
             )
             return entry, reference_output
         except Exception as error:
@@ -646,7 +900,7 @@ class ExactShapeAudioPrefixGraphCache:
                 key.packed_rows,
                 error,
             )
-            return None, None
+            return None, reference_output
 
 
 class _NoopPrefixBackend:

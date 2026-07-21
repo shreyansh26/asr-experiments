@@ -17,12 +17,20 @@ PATCH_DIR = Path(__file__).resolve().parents[1] / "inference" / "vllm_static_fp8
 sys.path.insert(0, str(PATCH_DIR))
 
 import audio_prefix_cudagraph_patch as prefix_patch  # noqa: E402
-from audio_cpu_metadata_pack_patch import run_audio_prefix_eager  # noqa: E402
+from audio_cpu_metadata_pack_patch import (  # noqa: E402
+    _build_cpu_metadata,
+    run_audio_prefix_eager,
+)
 from audio_prefix_cudagraph_patch import (  # noqa: E402
     ENV_NAME,
     ExactShapeAudioPrefixGraphCache,
+    _NATURAL_PACKED_ROWS,
     _NoopPrefixBackend,
+    _PROBATION_OBSERVATIONS,
+    _canonical_single_audio_natural_metadata,
     _make_prefix_graph_key,
+    _make_prefix_graph_signature,
+    _natural_feature_lengths_for_rows,
     audio_prefix_cudagraph_enabled,
 )
 
@@ -148,6 +156,37 @@ def _padded(seed: int = 0) -> torch.Tensor:
     )
 
 
+def _natural_metadata(feature_length: int):
+    values = _canonical_single_audio_natural_metadata(feature_length)
+    if values is None:
+        raise ValueError("feature length is outside the natural hotset")
+    chunk_lengths, pack_metadata, cu, feature_lens, aftercnn_lens = values
+    return (
+        torch.tensor(chunk_lengths, dtype=torch.int64),
+        torch.tensor(pack_metadata, dtype=torch.int32),
+        cu,
+        feature_lens,
+        aftercnn_lens,
+    )
+
+
+def _natural_padded(feature_length: int, seed: int = 0) -> torch.Tensor:
+    chunk_lengths = _natural_metadata(feature_length)[0].tolist()
+    generator = torch.Generator().manual_seed(seed)
+    chunks = [
+        torch.randn(
+            (length, 128),
+            generator=generator,
+            dtype=torch.bfloat16,
+        )
+        for length in chunk_lengths
+    ]
+    return torch.nn.utils.rnn.pad_sequence(
+        chunks,
+        batch_first=True,
+    ).transpose(1, 2).unsqueeze(1)
+
+
 class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
     def test_environment_gate_is_strict(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
@@ -193,6 +232,87 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         )
         self.assertNotEqual(key, altered_key)
 
+    def test_natural_single_audio_inventory_is_104_exact_keys_14_signatures(self) -> None:
+        keys = []
+        signatures = set()
+        expected_ranges = {
+            377: tuple(range(2897, 2901)),
+            390: tuple(range(2997, 3001)),
+        }
+        for rows in range(378, 390):
+            first = 2901 + (rows - 378) * 8
+            expected_ranges[rows] = tuple(range(first, first + 8))
+
+        for rows in sorted(_NATURAL_PACKED_ROWS):
+            self.assertEqual(
+                _natural_feature_lengths_for_rows(rows),
+                expected_ranges[rows],
+            )
+            for feature_length in expected_ranges[rows]:
+                expected_metadata = _natural_metadata(feature_length)
+                built_chunks, built_pack, built_cu = _build_cpu_metadata(
+                    torch.tensor([feature_length], dtype=torch.int64),
+                    torch.tensor([rows], dtype=torch.int64),
+                    n_window=50,
+                    n_window_infer=800,
+                )
+                self.assertTrue(torch.equal(built_chunks, expected_metadata[0]))
+                self.assertTrue(torch.equal(built_pack, expected_metadata[1]))
+                self.assertEqual(tuple(built_cu), expected_metadata[2])
+                padded = _natural_padded(feature_length, seed=feature_length)
+                key = _make_prefix_graph_key(
+                    padded,
+                    *expected_metadata,
+                )
+                self.assertIsNotNone(key)
+                assert key is not None
+                self.assertEqual(key.packed_rows, rows)
+                self.assertEqual(
+                    key.padded_shape,
+                    (
+                        29 if rows == 377 else 30,
+                        1,
+                        128,
+                        100,
+                    ),
+                )
+                self.assertEqual(key.padded_stride, (12800, 128, 1, 128))
+                keys.append(key)
+                signatures.add(_make_prefix_graph_signature(key))
+
+        self.assertEqual(len(keys), 104)
+        self.assertEqual(len(set(keys)), 104)
+        self.assertEqual(len(signatures), 14)
+
+    def test_natural_key_rejects_noncanonical_full_metadata(self) -> None:
+        feature_length = 2972
+        padded = _natural_padded(feature_length)
+        metadata = list(_natural_metadata(feature_length))
+        self.assertIsNotNone(_make_prefix_graph_key(padded, *metadata))
+
+        cases = []
+        altered_chunks = metadata[0].clone()
+        altered_chunks[-1] -= 1
+        cases.append((altered_chunks, *metadata[1:]))
+        altered_pack = metadata[1].clone()
+        altered_pack[-1] -= 1
+        cases.append((metadata[0], altered_pack, *metadata[2:]))
+        cases.append((metadata[0], metadata[1], (0, 104, 208, 311, 384), *metadata[3:]))
+        cases.append((metadata[0], metadata[1], metadata[2], (2971,), metadata[4]))
+        cases.append((metadata[0], metadata[1], metadata[2], metadata[3], (383,)))
+        cases.append(
+            (
+                metadata[0],
+                metadata[1],
+                metadata[2],
+                (800, 2172),
+                (104, 280),
+            )
+        )
+        for altered in cases:
+            with self.subTest(metadata=altered[2:]):
+                self.assertIsNone(_make_prefix_graph_key(padded, *altered))
+
     def test_unsupported_shape_is_not_admitted(self) -> None:
         chunk_lengths, pack_metadata, cu_seqlens, feature_lens, _ = _metadata(266)
         self.assertIsNone(
@@ -217,7 +337,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         second = _padded(2)
 
         with torch.inference_mode():
-            for _ in range(8):
+            for _ in range(_PROBATION_OBSERVATIONS):
                 output_first = cache.run(
                     encoder,
                     first,
@@ -238,6 +358,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
             )
 
         self.assertEqual(cache.entry_count, 1)
+        self.assertEqual(cache.admitted_key_count, 1)
         self.assertTrue(torch.equal(output_second, reference_second))
         self.assertFalse(torch.equal(output_first, output_second))
         self.assertNotEqual(output_second.data_ptr(), reference_second.data_ptr())
@@ -253,7 +374,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         padded = _padded(9)
 
         with torch.inference_mode():
-            for _ in range(7):
+            for observation in range(1, _PROBATION_OBSERVATIONS):
                 output = cache.run(
                     encoder,
                     padded,
@@ -261,7 +382,10 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
                     async_tensor_h2d=None,
                 )
                 self.assertEqual(cache.entry_count, 0)
+                self.assertEqual(cache.admitted_key_count, 0)
+                self.assertEqual(cache.probation_key_count, 1)
                 self.assertEqual(backend.capture_calls, 0)
+                self.assertEqual(observation, cache._probation_counts[next(iter(cache._probation_counts))])
             eighth = cache.run(
                 encoder,
                 padded,
@@ -292,31 +416,152 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         self.assertTrue(torch.equal(eighth, expected_eighth))
         self.assertTrue(torch.equal(ninth, expected_ninth))
         self.assertEqual(cache.entry_count, 1)
+        self.assertEqual(cache.admitted_key_count, 1)
         self.assertEqual(cache.probation_key_count, 0)
         self.assertEqual(backend.capture_calls, 1)
         self.assertEqual(backend.replay_calls, 2)
 
-    def test_probation_state_is_bounded_for_one_off_keys(self) -> None:
+    def test_natural_exact_keys_share_signature_only_after_own_probation(self) -> None:
         encoder = _encoder()
         backend = _CountingPrefixBackend()
         cache = ExactShapeAudioPrefixGraphCache(
             backend=backend,
-            max_entries=2,
             warmup_iterations=1,
         )
+        first_length, *_, alias_length = _natural_feature_lengths_for_rows(387)
+        first_metadata = _natural_metadata(first_length)
+        alias_metadata = _natural_metadata(alias_length)
+        first_padded = _natural_padded(first_length, seed=11)
+        alias_padded = _natural_padded(alias_length, seed=12)
 
         with torch.inference_mode():
-            for rows in (264, 265, 267):
+            for _ in range(_PROBATION_OBSERVATIONS):
+                cache.run(
+                    encoder,
+                    first_padded,
+                    *first_metadata,
+                    async_tensor_h2d=None,
+                )
+            for _ in range(_PROBATION_OBSERVATIONS - 1):
+                eager_alias = cache.run(
+                    encoder,
+                    alias_padded,
+                    *alias_metadata,
+                    async_tensor_h2d=None,
+                )
+            self.assertEqual(cache.entry_count, 1)
+            self.assertEqual(cache.admitted_key_count, 1)
+            admitted_alias = cache.run(
+                encoder,
+                alias_padded,
+                *alias_metadata,
+                async_tensor_h2d=None,
+            )
+            replay_alias_padded = _natural_padded(alias_length, seed=13)
+            replay_alias = cache.run(
+                encoder,
+                replay_alias_padded,
+                *alias_metadata,
+                async_tensor_h2d=None,
+            )
+            expected_alias = run_audio_prefix_eager(
+                encoder,
+                alias_padded,
+                *alias_metadata,
+                async_tensor_h2d=None,
+            )
+            expected_replay_alias = run_audio_prefix_eager(
+                encoder,
+                replay_alias_padded,
+                *alias_metadata,
+                async_tensor_h2d=None,
+            )
+
+        self.assertTrue(torch.equal(eager_alias, expected_alias))
+        self.assertTrue(torch.equal(admitted_alias, expected_alias))
+        self.assertTrue(torch.equal(replay_alias, expected_replay_alias))
+        self.assertEqual(cache.entry_count, 1)
+        self.assertEqual(cache.admitted_key_count, 2)
+        self.assertEqual(cache.probation_key_count, 0)
+        self.assertEqual(backend.capture_calls, 1)
+
+    def test_graph_entries_and_probation_do_not_evict(self) -> None:
+        encoder = _encoder()
+        cache = ExactShapeAudioPrefixGraphCache(
+            backend=_NoopPrefixBackend(),
+            max_entries=1,
+            max_probation_keys=2,
+            warmup_iterations=1,
+        )
+        first_length = _natural_feature_lengths_for_rows(377)[-1]
+        second_length = _natural_feature_lengths_for_rows(378)[-1]
+
+        with torch.inference_mode():
+            for _ in range(_PROBATION_OBSERVATIONS):
+                cache.run(
+                    encoder,
+                    _natural_padded(first_length, seed=20),
+                    *_natural_metadata(first_length),
+                    async_tensor_h2d=None,
+                )
+            for _ in range(_PROBATION_OBSERVATIONS):
+                cache.run(
+                    encoder,
+                    _natural_padded(second_length, seed=21),
+                    *_natural_metadata(second_length),
+                    async_tensor_h2d=None,
+                )
+            replay_input = _natural_padded(first_length, seed=22)
+            replay_output = cache.run(
+                encoder,
+                replay_input,
+                *_natural_metadata(first_length),
+                async_tensor_h2d=None,
+            )
+            reference = run_audio_prefix_eager(
+                encoder,
+                replay_input,
+                *_natural_metadata(first_length),
+                async_tensor_h2d=None,
+            )
+
+        self.assertTrue(torch.equal(replay_output, reference))
+        self.assertEqual(cache.entry_count, 1)
+        self.assertEqual(cache.admitted_key_count, 1)
+        self.assertEqual(cache.probation_key_count, 0)
+
+    def test_probation_capacity_stays_bounded_without_evicting_seen_keys(self) -> None:
+        encoder = _encoder()
+        cache = ExactShapeAudioPrefixGraphCache(
+            backend=_NoopPrefixBackend(),
+            max_probation_keys=2,
+            warmup_iterations=1,
+        )
+        metadata_by_rows = [_metadata(rows) for rows in (264, 265, 267)]
+        keys = [
+            _make_prefix_graph_key(_padded(rows), *metadata)
+            for rows, metadata in zip((264, 265, 267), metadata_by_rows, strict=True)
+        ]
+        self.assertTrue(all(key is not None for key in keys))
+
+        with torch.inference_mode():
+            for rows, metadata in zip(
+                (264, 265, 267),
+                metadata_by_rows,
+                strict=True,
+            ):
                 cache.run(
                     encoder,
                     _padded(rows),
-                    *_metadata(rows),
+                    *metadata,
                     async_tensor_h2d=None,
                 )
 
-        self.assertEqual(cache.entry_count, 0)
         self.assertEqual(cache.probation_key_count, 2)
-        self.assertEqual(backend.capture_calls, 0)
+        assert keys[0] is not None and keys[1] is not None and keys[2] is not None
+        self.assertIn(keys[0], cache._probation_counts)
+        self.assertIn(keys[1], cache._probation_counts)
+        self.assertNotIn(keys[2], cache._probation_counts)
 
     def test_cuda_backend_records_cross_stream_tensor_lifetimes(self) -> None:
         calls = []
@@ -492,7 +737,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         padded = _padded(3)
 
         with torch.inference_mode():
-            for _ in range(8):
+            for _ in range(_PROBATION_OBSERVATIONS):
                 output = cache.run(
                     encoder,
                     padded,
@@ -525,7 +770,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         )
 
         with torch.inference_mode():
-            for _ in range(8):
+            for _ in range(_PROBATION_OBSERVATIONS):
                 output = cache.run(
                     encoder,
                     _padded(4),
@@ -546,7 +791,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         )
         metadata = _metadata()
         with torch.inference_mode():
-            for _ in range(8):
+            for _ in range(_PROBATION_OBSERVATIONS):
                 cache.run(
                     encoder,
                     _padded(5),

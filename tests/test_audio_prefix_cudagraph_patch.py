@@ -27,6 +27,7 @@ from audio_prefix_cudagraph_patch import (  # noqa: E402
     _NATURAL_PACKED_ROWS,
     _NoopPrefixBackend,
     _PROBATION_OBSERVATIONS,
+    _TAIL_PACKED_ROWS,
     _canonical_single_audio_natural_metadata,
     _make_prefix_graph_key,
     _make_prefix_graph_signature,
@@ -203,6 +204,43 @@ def _natural_padded(feature_length: int, seed: int = 0) -> torch.Tensor:
     ).transpose(1, 2).unsqueeze(1)
 
 
+def _single_audio_tail_case(
+    feature_length: int,
+    rows: int,
+    *,
+    seed: int,
+):
+    feature_lens = torch.tensor([feature_length], dtype=torch.int64)
+    aftercnn_lens = torch.tensor([rows], dtype=torch.int64)
+    chunk_lengths, pack_metadata, cu_seqlens = _build_cpu_metadata(
+        feature_lens,
+        aftercnn_lens,
+        n_window=50,
+        n_window_infer=800,
+    )
+    generator = torch.Generator().manual_seed(seed)
+    chunks = [
+        torch.randn(
+            (int(length), 128),
+            generator=generator,
+            dtype=torch.bfloat16,
+        )
+        for length in chunk_lengths.tolist()
+    ]
+    padded = torch.nn.utils.rnn.pad_sequence(
+        chunks,
+        batch_first=True,
+    ).transpose(1, 2).unsqueeze(1)
+    metadata = (
+        chunk_lengths,
+        pack_metadata,
+        tuple(cu_seqlens),
+        (feature_length,),
+        (rows,),
+    )
+    return padded, metadata
+
+
 class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
     def test_environment_gate_is_strict(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
@@ -329,16 +367,45 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
             with self.subTest(metadata=altered[2:]):
                 self.assertIsNone(_make_prefix_graph_key(padded, *altered))
 
-    def test_unsupported_shape_is_not_admitted(self) -> None:
-        chunk_lengths, pack_metadata, cu_seqlens, feature_lens, _ = _metadata(266)
+    def test_expanded_21_chunk_tail_rows_are_admitted(self) -> None:
+        self.assertEqual(
+            _TAIL_PACKED_ROWS,
+            frozenset(range(263, 274)),
+        )
+        feature_lengths = {
+            263: 2020,
+            266: 2048,
+            269: 2070,
+            271: 2088,
+        }
+        for rows, feature_length in feature_lengths.items():
+            with self.subTest(rows=rows, feature_length=feature_length):
+                padded, metadata = _single_audio_tail_case(
+                    feature_length,
+                    rows,
+                    seed=rows,
+                )
+                key = _make_prefix_graph_key(
+                    padded,
+                    *metadata,
+                )
+                self.assertIsNotNone(key)
+                assert key is not None
+                self.assertEqual(key.packed_rows, rows)
+                self.assertEqual(key.padded_shape, (21, 1, 128, 100))
+                self.assertEqual(key.padded_stride, (12800, 128, 1, 128))
+                self.assertEqual(key.feature_lens_values, (feature_length,))
+                self.assertEqual(key.aftercnn_lens_values, (rows,))
+
+        unsupported_padded, unsupported_metadata = _single_audio_tail_case(
+            2016,
+            262,
+            seed=262,
+        )
         self.assertIsNone(
             _make_prefix_graph_key(
-                _padded(),
-                chunk_lengths,
-                pack_metadata,
-                cu_seqlens,
-                feature_lens,
-                (104, 104, 58),
+                unsupported_padded,
+                *unsupported_metadata,
             )
         )
 

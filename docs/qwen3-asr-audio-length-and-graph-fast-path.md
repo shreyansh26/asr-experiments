@@ -5,8 +5,10 @@ length, how that feature length becomes the post-CNN row count used by the
 audio transformer, and which resulting shapes are admitted by the current
 audio-prefix and audio-suffix CUDA graphs.
 
-The implementation described here is the selected round-four candidate on
-branch `opt5/audio-prefix-shared-suffix-bucketed`. It combines:
+The implementation described here starts from the selected round-four
+candidate on branch `opt5/audio-prefix-shared-suffix-bucketed`. Follow-up
+branch `opt6/audio-tail-rows-263-271` expands the compatible 21-chunk tail row
+family from seven rows to the contiguous range `M=263..273`. It combines:
 
 - the accepted static-FP8 decoder with fused Q/K RMSNorm, MRoPE, and KV-cache
   write;
@@ -233,9 +235,10 @@ exact feature-length keys reduce to 14 graph-static signatures, one for each
 post-CNN row count `M=377..390`. The signatures share a CUDA graph memory pool
 and are serialized because captures from that pool can alias allocations.
 
-The earlier observed tail family admits 21 raw convolution chunks with
-`M in {264, 265, 267, 268, 270, 272, 273}` when all other exact metadata guards
-also pass.
+The tail family admits exactly 21 raw convolution chunks with
+`M in {263, ..., 273}` when all other exact metadata guards also pass. The
+21-chunk restriction preserves the captured prefix input topology
+`(21,1,128,100)`; it is an exact CUDA-graph shape guard, not a model limit.
 
 Implementation:
 
@@ -248,14 +251,14 @@ The suffix graph covers the 24 audio-transformer layers and output projection.
 Exact runtime keys are admitted into two padded graph families:
 
 ```text
-tail rows M in {264, 265, 267, 268, 270, 272, 273}
+tail rows M in {263, ..., 273}
   -> padded graph bucket of 273 rows
 
 natural rows M in {377, ..., 390}
   -> padded graph bucket of 390 rows
 ```
 
-Padding reduces 21 exact suffix shapes to two captured graphs, while exact
+Padding reduces 25 exact suffix shapes to two captured graphs, while exact
 pre-admission prevents an unsupported shape or attention layout from replaying
 through a merely equal-sized bucket.
 
@@ -300,20 +303,49 @@ extraction. The effective server-created natural range therefore ends at
 ## Exact observed tail coverage
 
 The 50-second workload produced a second family of approximately 20--21 second
-final chunks. The currently admitted single-audio duration bands are:
+final chunks. Follow-up branch `opt6/audio-tail-rows-263-271` makes the admitted
+single-audio feature range continuous across these rows:
 
 | Post-CNN rows `M` | Exact feature lengths `F` | Approximate duration |
 |---:|---:|---:|
+| 263 | 2017..2024 | 20.17..<20.25 s |
 | 264 | 2025..2032 | 20.25..<20.33 s |
 | 265 | 2033..2040 | 20.33..<20.41 s |
+| 266 | 2041..2048 | 20.41..<20.49 s |
 | 267 | 2049..2056 | 20.49..<20.57 s |
 | 268 | 2057..2064 | 20.57..<20.65 s |
+| 269 | 2065..2072 | 20.65..<20.73 s |
 | 270 | 2073..2080 | 20.73..<20.81 s |
+| 271 | 2081..2088 | 20.81..<20.89 s |
 | 272 | 2089..2096 | 20.89..<20.97 s |
 | 273 | 2097..2100 | 20.97..<21.01 s |
 
-Rows 263 and 269 are not admitted. This tail family is workload-informed
-rather than complete coverage of possible final chunks.
+The expanded family covers `F=2017..2100`, approximately
+`[20.17, 21.01)` seconds, without changing the 273-row suffix bucket. It is
+still workload-informed rather than complete coverage of possible final
+chunks in `(0, 30]` seconds.
+
+### Follow-up GPU validation
+
+On 2026-07-21, GPU1 passed the SM90 suffix helper for all 25 exact keys: the
+11 tail rows `M=263..273` and 14 natural rows `M=377..390`. Every key was
+bitwise exact, bucket-eager and replay kernel order matched at 268 kernels,
+and alternating plus two-thread/two-stream shared-bucket gates passed.
+
+The chained prefix-plus-suffix helper then passed each newly admitted row with
+eight-observation probation, changed-content equality, and two-thread/two-
+stream concurrency:
+
+| New row | Eager CUDA | Copy + graph replay + clone | Eager host call | Graph host call |
+|---:|---:|---:|---:|---:|
+| 263 | 6493.632 us | 2134.784 us | 6507.907 us | 165.693 us |
+| 266 | 6804.240 us | 2135.920 us | 6834.688 us | 170.253 us |
+| 269 | 6683.440 us | 2137.824 us | 6722.245 us | 172.673 us |
+| 271 | 6722.048 us | 2133.536 us | 6700.560 us | 167.908 us |
+
+These are focused helper measurements, not end-to-end service results. The
+expanded admission set still requires an adjacent service benchmark before it
+can replace the selected `opt5` result.
 
 ## Long-file splitting and arbitrary final tails
 
@@ -359,15 +391,16 @@ For an exact 50-second decoded input with one split:
 | 29.0 s | 21.0 s | 273 | Yes |
 | 29.1 s | 20.9 s | 272 | Yes |
 | 29.2 s | 20.8 s | 270 | Yes |
-| 29.3 s | 20.7 s | 269 | No |
+| 29.3 s | 20.7 s | 269 | Yes |
 | 29.4 s | 20.6 s | 268 | Yes |
 | 29.5 s | 20.5 s | 267 | Yes |
 | 29.6 s | 20.4 s | 265 | Yes |
 | 29.7 s | 20.3 s | 264 | Yes |
-| 29.8 s | 20.2 s | 263 | No |
+| 29.8 s | 20.2 s | 263 | Yes |
 
 The non-final chunk is graph-eligible in every row. Seven of the nine possible
-exact tails are covered by the observed tail row family.
+exact tails were covered by the original observed tail row family; the
+follow-up expansion covers all nine.
 
 ### Other illustrative file lengths
 
@@ -474,4 +507,3 @@ offset, the per-audio length tuples, and the cumulative attention boundaries.
 - The varying 550-file workload benefits because enough of its individual
   server chunks are graph-eligible, even though not every audio is fully
   covered.
-

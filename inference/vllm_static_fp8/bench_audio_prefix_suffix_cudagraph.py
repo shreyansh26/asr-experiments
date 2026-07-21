@@ -10,21 +10,83 @@ import threading
 import torch
 
 from audio_cpu_metadata_pack_patch import (
+    _build_cpu_metadata,
     run_audio_prefix_eager,
     run_audio_suffix_eager,
 )
-from audio_prefix_cudagraph_patch import ExactShapeAudioPrefixGraphCache
+from audio_prefix_cudagraph_patch import (
+    _TAIL_PACKED_ROWS,
+    ExactShapeAudioPrefixGraphCache,
+)
 from audio_suffix_cudagraph_patch import ExactShapeAudioSuffixGraphCache
 from bench_audio_prefix_cudagraph import (
-    _cuda_timed_us,
-    _host_timed_us,
-    _metadata,
+    _median_cuda_us,
+    _median_host_call_us,
 )
 from bench_audio_suffix_cudagraph import (
     _initialize_single_gpu_distributed,
     _new_encoder,
 )
 from vllm.utils.torch_utils import async_tensor_h2d
+
+
+_REPRESENTATIVE_FEATURE_LENGTHS = {
+    263: 2020,
+    264: 2030,
+    265: 2040,
+    266: 2048,
+    267: 2050,
+    268: 2060,
+    269: 2070,
+    270: 2080,
+    271: 2088,
+    272: 2090,
+    273: 2100,
+}
+
+
+def _tail_metadata(total_rows: int) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+]:
+    feature_length = _REPRESENTATIVE_FEATURE_LENGTHS[total_rows]
+    chunk_lengths, pack_metadata, cu_seqlens = _build_cpu_metadata(
+        torch.tensor([feature_length], dtype=torch.int64),
+        torch.tensor([total_rows], dtype=torch.int64),
+        n_window=50,
+        n_window_infer=800,
+    )
+    return (
+        chunk_lengths,
+        pack_metadata,
+        tuple(cu_seqlens),
+        (feature_length,),
+        (total_rows,),
+    )
+
+
+def _tail_padded(
+    chunk_lengths: torch.Tensor,
+    *,
+    device: torch.device,
+    generator: torch.Generator,
+) -> torch.Tensor:
+    chunks = [
+        torch.randn(
+            (int(length), 128),
+            device=device,
+            dtype=torch.bfloat16,
+            generator=generator,
+        )
+        for length in chunk_lengths.tolist()
+    ]
+    return torch.nn.utils.rnn.pad_sequence(
+        chunks,
+        batch_first=True,
+    ).transpose(1, 2).unsqueeze(1)
 
 
 def _concurrent_chain_gate(
@@ -41,10 +103,9 @@ def _concurrent_chain_gate(
 ) -> None:
     inputs_by_thread = [
         [
-            torch.randn(
-                (21, 1, 128, 100),
+            _tail_padded(
+                metadata[0],
                 device=device,
-                dtype=torch.bfloat16,
                 generator=generator,
             )
             for _ in range(iterations)
@@ -134,7 +195,7 @@ def _main() -> None:
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required")
-    if args.rows not in {264, 265, 267, 268, 270, 272, 273}:
+    if args.rows not in _TAIL_PACKED_ROWS:
         raise ValueError("rows must be one of the admitted trace bucket sizes")
     if args.warmup <= 0 or args.repeats <= 0 or args.concurrency_iterations <= 0:
         raise ValueError(
@@ -148,7 +209,7 @@ def _main() -> None:
     device = torch.device("cuda", 0)
     _initialize_single_gpu_distributed(args.master_port)
     encoder = _new_encoder(device)
-    metadata = _metadata(args.rows)
+    metadata = _tail_metadata(args.rows)
     cu_seqlens = torch.tensor(metadata[2], dtype=torch.int32, device=device)
     max_seqlen = torch.tensor(104, dtype=torch.int32, device="cpu")
     prefix_cache = ExactShapeAudioPrefixGraphCache(
@@ -158,10 +219,9 @@ def _main() -> None:
         warmup_iterations=args.warmup,
     )
     generator = torch.Generator(device=device).manual_seed(args.seed)
-    padded = torch.randn(
-        (21, 1, 128, 100),
+    padded = _tail_padded(
+        metadata[0],
         device=device,
-        dtype=torch.bfloat16,
         generator=generator,
     )
 
@@ -212,7 +272,11 @@ def _main() -> None:
         if prefix_cache.entry_count != 1 or suffix_cache.entry_count != 1:
             raise AssertionError("both graph caches must be admitted by call 8")
 
-        other_padded = torch.randn_like(padded)
+        other_padded = _tail_padded(
+            metadata[0],
+            device=device,
+            generator=generator,
+        )
         other_eager = eager(other_padded)
         other_candidate = candidate(other_padded)
         torch.cuda.synchronize(device)
@@ -240,12 +304,20 @@ def _main() -> None:
         print("probation=PASS observations=8")
         print("concurrency=PASS threads=2 streams=2")
         print(f"rows={args.rows}")
-        print(f"eager_host_us={_host_timed_us(eager, args.repeats):.3f}")
-        print(f"combined_host_us={_host_timed_us(candidate, args.repeats):.3f}")
-        print(f"eager_cuda_us={_cuda_timed_us(eager, args.repeats):.3f}")
+        print(
+            f"eager_host_us={_median_host_call_us(eager, repeats=args.repeats):.3f}"
+        )
+        print(
+            "combined_host_us="
+            f"{_median_host_call_us(candidate, repeats=args.repeats):.3f}"
+        )
+        print(
+            "eager_cuda_us="
+            f"{_median_cuda_us(eager, warmup=args.warmup, repeats=args.repeats):.3f}"
+        )
         print(
             "combined_copy_replay_clone_cuda_us="
-            f"{_cuda_timed_us(candidate, args.repeats):.3f}"
+            f"{_median_cuda_us(candidate, warmup=args.warmup, repeats=args.repeats):.3f}"
         )
         print("gate=PASS_EXACT_AUDIO_PREFIX_SUFFIX_CUDAGRAPH")
 

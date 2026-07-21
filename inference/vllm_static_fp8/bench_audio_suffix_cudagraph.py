@@ -383,7 +383,7 @@ def _main() -> None:
         type=_parse_segments,
         help=(
             "Comma-separated exact sequence lengths. Repeat for every observed "
-            "key. Defaults cover all 21 exact keys in both row buckets."
+            "key. Defaults cover all 25 exact keys in both row buckets."
         ),
     )
     parser.add_argument("--warmup", type=int, default=3)
@@ -419,7 +419,7 @@ def _main() -> None:
         for values in case_values
     ):
         raise ValueError(
-            "Expected at most 21 canonical tail/full-chunk exact keys with a "
+            "Expected at most 25 canonical tail/full-chunk exact keys with a "
             f"supported total row count in {sorted(_SUPPORTED_ROWS)}"
         )
     if len(set(case_values)) != len(case_values):

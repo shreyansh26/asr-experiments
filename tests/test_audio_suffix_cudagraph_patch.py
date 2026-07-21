@@ -200,16 +200,16 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         suffix_patch.audio_suffix_cudagraph_enabled()
 
-    def test_canonical_hotset_maps_21_exact_keys_to_two_buckets(self) -> None:
+    def test_canonical_hotset_maps_25_exact_keys_to_two_buckets(self) -> None:
         self.assertEqual(
             suffix_patch._TAIL_ROWS,
-            frozenset({264, 265, 267, 268, 270, 272, 273}),
+            frozenset(range(263, 274)),
         )
         self.assertEqual(
             suffix_patch._NATURAL_FULL_CHUNK_ROWS,
             frozenset(range(377, 391)),
         )
-        self.assertEqual(len(suffix_patch._SUPPORTED_ROWS), 21)
+        self.assertEqual(len(suffix_patch._SUPPORTED_ROWS), 25)
         self.assertEqual(suffix_patch._TAIL_BUCKET_ROWS, 273)
         self.assertEqual(suffix_patch._NATURAL_BUCKET_ROWS, 390)
         self.assertEqual(suffix_patch._MAX_CACHE_ENTRIES, 2)
@@ -217,7 +217,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             suffix_patch.ExactShapeAudioSuffixGraphCache()._max_entries,
             2,
         )
-        self.assertEqual(len(suffix_bench._DEFAULT_CASES), 21)
+        self.assertEqual(len(suffix_bench._DEFAULT_CASES), 25)
 
         helper_values = {
             suffix_bench._cumulative_values(segments)
@@ -315,9 +315,8 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 )
 
         for values in (
-            (0, 104, 208, 266),
-            (0, 104, 208, 269),
-            (0, 104, 208, 271),
+            (0, 104, 208, 262),
+            (0, 104, 208, 274),
             (0, 104, 208, 312, 376),
             (0, 104, 208, 312, 391),
         ):
@@ -523,11 +522,11 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
         self.assertEqual(len(probation_calls), 7)
         self.assertEqual(
             probation_calls[0].args[1:],
-            ((0, 104, 208, 264), 273, 1, 8, 0, 2, 0, 21),
+            ((0, 104, 208, 264), 273, 1, 8, 0, 2, 0, 25),
         )
         self.assertEqual(
             probation_calls[-1].args[1:],
-            ((0, 104, 208, 264), 273, 7, 8, 0, 2, 0, 21),
+            ((0, 104, 208, 264), 273, 7, 8, 0, 2, 0, 25),
         )
         capture_call = next(
             call
@@ -552,7 +551,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 8,
                 8,
                 1,
-                21,
+                25,
             ),
         )
         replay_call = next(
@@ -603,7 +602,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             {273, 390},
         )
 
-    def test_all_21_exact_keys_gate_into_only_two_bucket_graphs(self) -> None:
+    def test_all_25_exact_keys_gate_into_only_two_bucket_graphs(self) -> None:
         encoder = _FakeEncoder()
         backend = _FakeBackend()
         cache = suffix_patch.ExactShapeAudioSuffixGraphCache(
@@ -625,10 +624,10 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 self.assertTrue(torch.equal(actual, expected))
 
         self.assertEqual(cache.entry_count, 2)
-        self.assertEqual(cache.admitted_count, 21)
+        self.assertEqual(cache.admitted_count, 25)
         self.assertEqual(cache.rejected_count, 0)
         self.assertEqual(backend.capture_calls, 2)
-        self.assertEqual(backend.equal_calls, 21)
+        self.assertEqual(backend.equal_calls, 25)
         self.assertEqual(
             {key.bucket_rows for key in cache._entries},
             {273, 390},

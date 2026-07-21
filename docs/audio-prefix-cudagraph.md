@@ -101,12 +101,14 @@ another exact key remains usable. Capture exceptions, unsupported layouts,
 training/grad mode, nested capture, or cache capacity all fail closed to the
 accepted eager prefix.
 
-There is no graph or probation eviction. Capacity is 21 graph signatures (the
-14 natural signatures plus the earlier seven tail-row slots). Probation retains
-at most 111 exact keys; once full, unseen keys remain eager without displacing
-observed state. Explicit retained tensor storage is approximately 20.7 MiB for
-14 natural signatures, versus approximately 154.0 MiB for 104 separate graphs;
-CUDA graph private pools and convolution workspaces are additional.
+There is no graph or probation eviction. On follow-up branch
+`opt6/audio-tail-rows-263-271`, capacity is 25 graph signatures: 14 natural
+signatures plus 11 tail-row slots for the contiguous `M=263..273` family.
+Probation retains at most 115 exact keys; once full, unseen keys remain eager
+without displacing observed state. Explicit retained tensor storage is
+approximately 20.7 MiB for 14 natural signatures, versus approximately
+154.0 MiB for 104 separate graphs; CUDA graph private pools and convolution
+workspaces are additional.
 
 Each signature owns stable input/metadata/output buffers and an event. The cache
 now creates one execution stream and one `torch.cuda.graph_pool_handle()` lazily
@@ -168,6 +170,19 @@ Required final marker:
 ```text
 gate=PASS_EXACT_NATURAL_AUDIO_PREFIX_CUDAGRAPH
 ```
+
+### Follow-up 21-chunk tail-row gate
+
+Branch `opt6/audio-tail-rows-263-271` adds the missing compatible rows 263,
+266, 269, and 271 without changing the prefix input topology
+`(21,1,128,100)`. On 2026-07-21, GPU1 passed the chained prefix-plus-suffix
+helper independently for all four new rows. Each run passed bitwise equality,
+observation-eight admission, changed-content replay, and two-thread/two-stream
+concurrency. Copy + graph replay + clone CUDA time was 2133.536--2137.824 us,
+versus 6493.632--6804.240 us for chained eager execution.
+
+This helper result validates exact execution but does not replace an
+end-to-end service benchmark.
 
 ### Parent-branch 2026-07-20 baseline
 

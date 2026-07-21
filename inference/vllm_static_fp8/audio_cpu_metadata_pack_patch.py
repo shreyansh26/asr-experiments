@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from functools import wraps
-import hashlib
-import inspect
+from importlib import metadata as importlib_metadata
 from itertools import accumulate
+import json
 import os
+from pathlib import Path
+import tomllib
 from typing import Any, Mapping
 
 import torch
@@ -27,23 +29,28 @@ ENV_NAME = "ASR_AUDIO_CPU_METADATA_PACK"
 MAX_SEQLEN_ENV_NAME = "ASR_AUDIO_CPU_MAXSEQLEN"
 _PATCH_MARKER = "_asr_audio_cpu_metadata_pack_patch"
 
-# This experiment intentionally targets one installed vLLM implementation.  The
-# copied forward remains disabled if any of its three source seams drift.
-_EXPECTED_FORWARD_SHA256 = (
-    "d7b4e3db2c0157a16eda90e63bcad09a28506a8991ac1dffc18413059d793807"
+_EXPECTED_VLLM_VERSION = "0.24.0+cu129"
+_EXPECTED_VLLM_WHEEL_HASH = (
+    "sha256:597949743f2a00c0539d9e2ff0f67b32c608a378e973f99e7529fd6fa9445f70"
 )
-_EXPECTED_FIELD_CONFIG_SHA256 = (
-    "8a17c0eb01cfbf9f427de7e9dc24fcc91216f2bda846c91cab0b4addca5a3cb9"
-)
-_EXPECTED_PROCESS_AUDIO_SHA256 = (
-    "dcda6b1cc3c3dbb62f77fdc6e30bd34c3f174e3622c346fa383bf19f75fe945d"
-)
-_EXPECTED_CNN_OUTPUT_LENGTHS_SHA256 = (
-    "70a15691200217bbea5e938c75b044e006e61c4401cbda8900cbda8ede307950"
-)
-_EXPECTED_AUDIO_OUTPUT_LENGTHS_SHA256 = (
-    "eb472e321ad393edee5329d76a78b8a78bd11d54b1cbda552a344c95adf5b839"
-)
+
+# Previous exact-source guard retained for reference. Compatibility is now
+# selected by the installed vLLM version and locked wheel hash above.
+# _EXPECTED_FORWARD_SHA256 = (
+#     "d7b4e3db2c0157a16eda90e63bcad09a28506a8991ac1dffc18413059d793807"
+# )
+# _EXPECTED_FIELD_CONFIG_SHA256 = (
+#     "8a17c0eb01cfbf9f427de7e9dc24fcc91216f2bda846c91cab0b4addca5a3cb9"
+# )
+# _EXPECTED_PROCESS_AUDIO_SHA256 = (
+#     "dcda6b1cc3c3dbb62f77fdc6e30bd34c3f174e3622c346fa383bf19f75fe945d"
+# )
+# _EXPECTED_CNN_OUTPUT_LENGTHS_SHA256 = (
+#     "70a15691200217bbea5e938c75b044e006e61c4401cbda8900cbda8ede307950"
+# )
+# _EXPECTED_AUDIO_OUTPUT_LENGTHS_SHA256 = (
+#     "eb472e321ad393edee5329d76a78b8a78bd11d54b1cbda552a344c95adf5b839"
+# )
 
 
 @triton.jit
@@ -91,35 +98,45 @@ def audio_cpu_metadata_pack_enabled() -> bool:
     return raw_value == "1"
 
 
-def _source_sha256(value: Any) -> str | None:
-    try:
-        source = inspect.getsource(value)
-    except (OSError, TypeError):
-        return None
-    return hashlib.sha256(source.encode()).hexdigest()
-
-
-def _installed_sources_are_supported(
-    model_cls: type[Any],
-    asr_module: Any,
+def _installed_vllm_wheel_is_supported(
+    *,
+    _lock_path: Path | None = None,
 ) -> bool:
-    return (
-        model_cls.__module__
-        == "vllm.model_executor.models.qwen3_omni_moe_thinker"
-        and model_cls.__name__ == "Qwen3OmniMoeAudioEncoder"
-        and asr_module.__name__ == "vllm.model_executor.models.qwen3_asr"
-        and _source_sha256(model_cls.forward) == _EXPECTED_FORWARD_SHA256
-        and _source_sha256(asr_module._qwen3asr_field_config)
-        == _EXPECTED_FIELD_CONFIG_SHA256
-        and _source_sha256(
-            asr_module.Qwen3ASRForConditionalGeneration._process_audio_input
+    """Check the installed vLLM version and its locked wheel provenance."""
+    try:
+        distribution = importlib_metadata.distribution("vllm")
+        if distribution.version != _EXPECTED_VLLM_VERSION:
+            return False
+
+        direct_url_text = distribution.read_text("direct_url.json")
+        if direct_url_text is None:
+            return False
+        wheel_url = json.loads(direct_url_text).get("url")
+        if not isinstance(wheel_url, str):
+            return False
+
+        lock_path = _lock_path or Path(__file__).resolve().parents[2] / "uv.lock"
+        lock_data = tomllib.loads(lock_path.read_text())
+    except (
+        importlib_metadata.PackageNotFoundError,
+        json.JSONDecodeError,
+        OSError,
+        tomllib.TOMLDecodeError,
+    ):
+        return False
+
+    for package in lock_data.get("package", []):
+        if (
+            package.get("name") != "vllm"
+            or package.get("version") != _EXPECTED_VLLM_VERSION
+        ):
+            continue
+        return any(
+            wheel.get("url") == wheel_url
+            and wheel.get("hash") == _EXPECTED_VLLM_WHEEL_HASH
+            for wheel in package.get("wheels", [])
         )
-        == _EXPECTED_PROCESS_AUDIO_SHA256
-        and _source_sha256(model_cls._get_cnn_output_lengths)
-        == _EXPECTED_CNN_OUTPUT_LENGTHS_SHA256
-        and _source_sha256(asr_module._get_feat_extract_output_lengths)
-        == _EXPECTED_AUDIO_OUTPUT_LENGTHS_SHA256
-    )
+    return False
 
 
 def _expected_audio_output_lengths(feature_lens: torch.Tensor) -> torch.Tensor:
@@ -497,6 +514,12 @@ def install_audio_cpu_metadata_pack_patch(
             MAX_SEQLEN_ENV_NAME,
         )
         return False
+    if not _installed_vllm_wheel_is_supported():
+        logger.warning(
+            "Installed vLLM version or wheel hash does not match the CPU "
+            "metadata patch; leaving it unchanged"
+        )
+        return False
     from vllm.model_executor.models import qwen3_asr as asr_module
     from vllm.model_executor.models.qwen3_asr import Qwen3OmniMoeAudioEncoder
     from vllm.multimodal.inputs import MultiModalFieldConfig
@@ -511,13 +534,6 @@ def install_audio_cpu_metadata_pack_patch(
         if forward_patched and field_patched:
             return True
         raise RuntimeError("Audio CPU metadata patch is only partially installed")
-
-    if not _installed_sources_are_supported(model_cls, asr_module):
-        logger.warning(
-            "Installed Qwen3-ASR sources do not match the CPU metadata patch; "
-            "leaving them unchanged"
-        )
-        return False
 
     async_tensor_h2d = current_forward.__globals__.get("async_tensor_h2d")
     if async_tensor_h2d is None:
@@ -537,9 +553,9 @@ def install_audio_cpu_metadata_pack_patch(
         MultiModalFieldConfig,
     )
 
-    # Complete every metadata compatibility check and wrapper construction
-    # before installing even the max-seqlen prerequisite.  A source mismatch
-    # therefore leaves all three global seams unchanged.
+    # Complete the compatibility check and wrapper construction before
+    # installing even the max-seqlen prerequisite. A mismatch therefore leaves
+    # all three global seams unchanged.
     if not install_audio_cpu_maxseqlen_patch(
         model_cls=model_cls,
         flash_backend=AttentionBackendEnum.FLASH_ATTN,

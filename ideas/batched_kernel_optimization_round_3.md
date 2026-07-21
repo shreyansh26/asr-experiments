@@ -8,7 +8,9 @@ KV-cache write, and prefill head-grouping kernel. The work was restricted to
 out-of-tree patches and separate experiment branches; PyTorch, vLLM, Triton,
 and the model were not upgraded or replaced.
 
-The accepted result is `opt3/audio-cpu-metadata-pack` at commit `299bb3a`.
+The accepted result is `opt3/audio-cpu-metadata-pack`: implementation commit
+`299bb3a`, the `int32` length robustness fix and regression test in `fddce01`,
+and atomic prerequisite installation in `92c837e`.
 It keeps audio lengths and derived attention metadata on the CPU, removes the
 remaining device-to-host metadata synchronizations, and replaces dynamic
 boolean row packing with one exact Triton copy kernel. Against a fresh full
@@ -75,12 +77,19 @@ latency:     0.728,  0.705,  0.689 s        (mean 0.7073)
 TTFT:        0.198,  0.171,  0.162 s        (mean 0.1770)
 ```
 
-The matched B16 Nsight node trace is:
+The matched B16 Nsight node trace was generated locally in the main worktree:
 
 ```text
 inference/results/nsys/fp8static_qk_kvcache_fuse_b16_50s_node.nsys-rep
 inference/results/nsys/fp8static_qk_kvcache_fuse_b16_50s_node.sqlite
 ```
+
+These generated binary artifacts are intentionally not source-controlled. The
+captured files used for this analysis were 12,235,280 and 28,712,960 bytes,
+with SHA-256 digests `4dbbe04ebe718fbc6bf5b2a9f7716b2541a80597c788b310de566e07ab24faf8`
+and `b312734369b6b3e13799bdfcc85689de6addb62172a74c83ed5fe5c87c0bfaad`
+respectively. The aggregate evidence needed for the decision is retained
+below even when those local profiling artifacts are absent from a clean clone.
 
 Its dominant process-local graph had 246 replays, 309 nodes per replay,
 1.739 ms of summed kernel time, and a 1.863 ms replay envelope. Important
@@ -124,7 +133,7 @@ TTFT. The full run produced 4.619 files/s, 3.397 s latency, 0.528 s TTFT,
 
 Branch: `opt3/audio-cpu-metadata-pack`
 
-Commit: `299bb3a`
+Commits: `299bb3a`, robustness fix `fddce01`, atomic install `92c837e`
 
 Detailed note: [audio_cpu_metadata_pack.md](audio_cpu_metadata_pack.md)
 
@@ -197,6 +206,8 @@ upgraded; the alternate bitcode file was already present in the shared venv.
 
 Branch: `opt3/decode-down-cluster-splitk`
 
+CPU/compiler commit: `9d22bd8`
+
 The current H100 small-M down projection is FP8 E4M3
 `[M,6144] x [6144,2048]`, M in `{1,2,4,8,16}`. Its 32-CTA launch covers only
 24.2% of the 132 SMs and averages 7.725 us/layer. The independent CuTeDSL 4.5.2
@@ -204,7 +215,9 @@ prototype uses four K-quarter CTAs per output tile, a `(4,1,1)` cluster, DSMEM
 partial exchange, and a deterministic rank-0 reduction. The intended launch is
 128 CTAs, one near-full H100 wave, one kernel, and zero global workspace.
 
-The CPU import/source gate is complete. GPU compile, correctness, and timing are
+All M=1/2/4/8/16 specializations lower successfully with `cute.compile` for
+`sm_90a` while CUDA is hidden, and 12 integration/export/fallback/prewarm tests
+pass. H100 runtime loading, correctness, graph replay, and timing remain
 pending. The kill gate is bitwise or tightly characterized numerical parity
 plus a net target at or below roughly 6.5 us/layer across every M bucket. A
 second global reduction kernel is not acceptable because it is likely to erase

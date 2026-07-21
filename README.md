@@ -583,9 +583,16 @@ uv run python inference/analyse_results.py --mode batched
 
 ### Current results
 
-These tables are the current workspace snapshot from
-`inference/results/sequential.csv` and `inference/results/batched.csv`. Latency
-and TTFT values are seconds; throughput is completed files per second.
+Rows through `FP8 static + Q/K fusion` are the committed workspace snapshot
+from `inference/results/sequential.csv` and `inference/results/batched.csv`.
+The newer CPU-metadata row and its fresh main control come from the local
+round-three campaign documented in
+[the experiment note](ideas/audio_cpu_metadata_pack.md); prediction trees and
+appended CSV rows are generated evidence and are deliberately excluded from
+source commits. A clean clone therefore reproduces the implementation and the
+reported commands, but `analyse_results.py` will print the CPU-metadata row
+only after those benchmarks are rerun. Latency and TTFT values are seconds;
+throughput is completed files per second.
 
 `FP8 static + Q/K fusion` uses the dedicated launcher above. The optimization
 runs in decode and prefill: it combines Q/K RMSNorm, three-axis MRoPE, and the
@@ -601,12 +608,13 @@ the other seven measured steady-state stream synchronizations. See
 [the round-three result](ideas/audio_cpu_metadata_pack.md) for guards, helper
 correctness, repeated A/B measurements, and the full quality gate.
 
-Against the current static-FP8 rows, the full 16-worker batched snapshot gains
-5.8% throughput, improves latency percentiles by 6.0-8.1%, and improves TTFT
-percentiles by 9.2-11.2%. The full sequential snapshot gains 5.0% throughput
-and improves latency percentiles by 4.8-5.3%, with slightly worse TTFT. These
-rows were collected on different dates and are single workspace snapshots,
-not an interleaved statistical comparison.
+In the older committed snapshots, Q/K fusion versus base static FP8 gained
+5.8% throughput, improved full 16-worker batched latency percentiles by
+6.0-8.1%, and improved TTFT percentiles by 9.2-11.2%. The full sequential
+snapshot gained 5.0% throughput and improved latency percentiles by 4.8-5.3%,
+with slightly worse TTFT. Those rows were collected on different dates and are
+single workspace snapshots, not an interleaved statistical comparison. The
+CPU-metadata decision instead uses the fresh direct controls stated below.
 
 Sequential, full benchmark with 550 measured files:
 
@@ -638,7 +646,7 @@ Batched, full benchmark with 550 measured files:
 | FP8 dynamic | 16 | 3.563 | 7.166 | 9.903 | 0.343 | 1.121 | 1.838 | 4.104 | 0.158 | 0.380 |
 | FP8 static | 16 | 3.346 | 6.675 | 9.124 | 0.426 | 1.177 | 1.984 | 4.352 | 0.162 | 0.384 |
 | FP8 static + Q/K fusion | 16 | 3.137 | 6.276 | 8.382 | 0.385 | 1.069 | 1.761 | 4.604 | 0.166 | 0.387 |
-| FP8 static + Q/K + CPU metadata | 16 | **3.095** | **6.012** | 8.459 | 0.426 | 1.238 | 2.188 | **4.750** | 0.164 | 0.385 |
+| FP8 static + Q/K + CPU metadata (local round-three run) | 16 | **3.095** | **6.012** | 8.459 | 0.426 | 1.238 | 2.188 | **4.750** | 0.164 | 0.385 |
 
 Batched, 16 workers and 100 measured files with a 50-second audio limit:
 
@@ -652,7 +660,7 @@ Batched, 16 workers and 100 measured files with a 50-second audio limit:
 | FP8 dynamic | 16 | 0.735 | 1.279 | 1.481 | 0.154 | 0.432 | 0.499 | 20.731 |
 | FP8 static | 16 | 0.652 | 1.098 | 1.212 | 0.119 | 0.306 | 0.332 | 22.171 |
 | FP8 static + Q/K fusion | 16 | 0.636 | 1.226 | 1.424 | 0.122 | 0.499 | 0.614 | 22.635 |
-| FP8 static + Q/K + CPU metadata | 16 | 0.653 | 1.112 | 1.226 | 0.195 | 0.468 | 0.569 | 22.308 |
+| FP8 static + Q/K + CPU metadata (local round-three run) | 16 | 0.653 | 1.112 | 1.226 | 0.195 | 0.468 | 0.569 | 22.308 |
 
 The CPU-metadata row is backed by more than the single snapshots rendered in
 the percentile tables. Six 100-file candidate runs averaged 22.1708 files/s,

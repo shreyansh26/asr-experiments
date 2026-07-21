@@ -147,9 +147,13 @@ and the full CPU-max experiment:
 | CER | 0.163900 | **0.160686** | 0.163614 | -0.000286 | +0.002928 |
 | WER | 0.385612 | **0.382274** | 0.384638 | -0.000974 | +0.002364 |
 
-Predictions and benchmark artifacts are under
-`inference/results_fp8_static_qk_audio_cpu_metadata_pack/`; they are deliberately
-excluded from the experiment commit.
+The measured full run's local predictions are under
+`inference/results_fp8_static_qk_audio_cpu_metadata_pack/`; the repeated
+uniform runs used unique `/tmp/asr_audio_cpu_metadata_pack_*` roots. These
+generated artifacts and their appended CSV rows are deliberately excluded from
+the source commits. The README's reproduction commands use the repository's
+normal `predictions/results_fp8_static_qk_audio_cpu_metadata_pack/` hierarchy
+for new runs.
 
 ## Decision
 

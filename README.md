@@ -11,7 +11,7 @@ static-activation FP8, and an optimized static-FP8 path with custom Triton
 kernels for Q/K RMSNorm, MRoPE, paged KV-cache writes, and exact audio-row
 packing driven by CPU metadata.
 
-> **Current optimized path:**
+> **Current stable optimized path:**
 > `bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh`
 >
 > Against a fresh full main-branch control, this path improved throughput by
@@ -19,6 +19,18 @@ packing driven by CPU metadata.
 > TTFT regressed by 12.87%, so it is promoted specifically for the
 > latency-prioritized batched track. See [Current results](#current-results)
 > for the complete numbers and comparison boundaries.
+>
+> **Current round-four batched candidate:**
+> `opt5/audio-prefix-shared-suffix-bucketed`
+>
+> This branch layers a shared-prefix CUDA graph pool and a two-bucket
+> audio-suffix CUDA graph cache on top of the stable path. Its clean same-server
+> 550-file natural run reached `5.809 files/s`, `2.696 s` average latency, and
+> `0.629 s` average TTFT versus an adjacent accepted-path mean of
+> `4.803 files/s`, `3.269 s`, and `0.533 s`. CER/WER changed modestly in manual
+> full scoring. See
+> [Batched kernel optimization round 4](docs/batched-kernel-optimization-round4.md)
+> before promoting it.
 
 All commands below assume the repository root:
 
@@ -80,23 +92,21 @@ aggregate comparison table:
 
 ```bash
 # Controlled 100-file workload with 50-second clips.
-curl -fsS -X POST http://localhost:8090/reset_mm_cache
-curl -fsS -X POST http://localhost:8090/reset_encoder_cache
 uv run inference/run_benchmark.py \
   --mode batched \
   --workers 16 \
   --overwrite \
   --uniform-audio-length 50 \
   --num-files 100 \
+  --input-root data/prepared_data \
   --output-root predictions/results_fp8_static_qk_audio_cpu_metadata_pack/batched_predicted_uniform_audio_length_50s
 
 # Full workload; also computes aggregate CER/WER.
-curl -fsS -X POST http://localhost:8090/reset_mm_cache
-curl -fsS -X POST http://localhost:8090/reset_encoder_cache
 uv run inference/run_benchmark.py \
   --mode batched \
   --workers 16 \
   --overwrite \
+  --input-root data/prepared_data \
   --output-root predictions/results_fp8_static_qk_audio_cpu_metadata_pack/batched_predicted
 
 uv run inference/analyse_results.py --mode batched
@@ -127,11 +137,10 @@ bash inference/run_vllm_fp8_static_qk_prefill.sh
 bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh
 ```
 
-The inference and benchmark scripts reset vLLM prefix cache before each run with
-`POST /reset_prefix_cache`. All launchers enable the vLLM development API
-endpoints needed for that reset. For uncached A/B work, also reset the
-multimodal and encoder caches explicitly, as shown in the quick-start commands;
-the benchmark runner does not issue those two resets itself.
+The inference and benchmark scripts reset vLLM prefix cache before each run.
+All launchers enable the vLLM development API endpoints needed for that reset.
+Do not assume multimodal or encoder reset endpoints exist unless the running
+server has been checked for them.
 
 The static-FP8 launcher defaults to
 `inference/results/fp8_static_scales_128x50.json`. Generate it with:
@@ -534,6 +543,7 @@ the next precision:
 | `fp8_static` | `bash inference/run_vllm_fp8_static.sh` |
 | `fp8_static_qk_prefill` | `bash inference/run_vllm_fp8_static_qk_prefill.sh` |
 | `fp8_static_qk_audio_cpu_metadata` | `bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh` |
+| `fp8_static_qk_audio_prefix_suffix_cudagraph` | `PORT=8091 MODEL=/mnt/ssd2/hf_models/models--Qwen--Qwen3-ASR-1.7B/snapshots/7278e1e70fe206f11671096ffdd38061171dd6e5 bash inference/run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh --gpu-memory-utilization 0.75` |
 
 Use precision-specific output roots. This keeps prediction files isolated and
 allows `analyse_results.py` to infer the precision from the recorded path:
@@ -928,6 +938,10 @@ optimized paths:
   explains the synchronization audit, strict installed-source/runtime guards,
   exact Triton row-copy helper, repeated B16 service A/B, full CER/WER gate,
   and the TTFT tradeoff of the current latency-optimized path.
+- [Batched kernel optimization round 4](docs/batched-kernel-optimization-round4.md)
+  records the shared-prefix-pool plus two-bucket audio-suffix CUDA graph
+  candidate, clean adjacent batched A/B numbers, quality score, commands, and
+  branches that still need uncontested GPU service validation.
 - [Batched kernel optimization round 3](ideas/batched_kernel_optimization_round_3.md)
   records the fresh baseline, true-B16 Nsight breakdown, accepted and rejected
   branches, benchmark discipline, and remaining kernel opportunities.

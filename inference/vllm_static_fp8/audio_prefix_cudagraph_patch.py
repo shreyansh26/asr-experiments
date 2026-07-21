@@ -33,18 +33,15 @@ _INPUT_MELS = 128
 _INPUT_FRAMES = 100
 _PACKED_WIDTH = 1024
 _CONV_OUTPUT_ROWS = 13
-_TAIL_PACKED_ROWS = frozenset(
-    {263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273}
-)
+_TAIL_PACKED_ROWS = frozenset()
 _NATURAL_PACKED_ROWS = frozenset(range(377, 391))
-_SUPPORTED_PACKED_ROWS = _TAIL_PACKED_ROWS | _NATURAL_PACKED_ROWS
-_SUPPORTED_CHUNKS = frozenset({21, 29, 30})
+_SUPPORTED_PACKED_ROWS = _NATURAL_PACKED_ROWS
+_SUPPORTED_CHUNKS = frozenset({29, 30})
 _NATURAL_FEATURE_LENGTH_MIN = 2897
 _NATURAL_FEATURE_LENGTH_MAX = 3000
 _MAX_CACHE_ENTRIES = len(_SUPPORTED_PACKED_ROWS)
 _MAX_PROBATION_KEYS = (
     _NATURAL_FEATURE_LENGTH_MAX - _NATURAL_FEATURE_LENGTH_MIN + 1
-    + len(_TAIL_PACKED_ROWS)
 )
 _WARMUP_ITERATIONS = 3
 _PROBATION_OBSERVATIONS = 8
@@ -289,15 +286,11 @@ def _make_prefix_graph_key(
         feature_lens_values=tuple(int(value) for value in feature_lens_values),
         aftercnn_lens_values=tuple(int(value) for value in aftercnn_lens_values),
     )
-    tail_key = (
-        packed_rows in _TAIL_PACKED_ROWS
-        and num_chunks == 21
-    )
     if (
         packed_rows is None
         or num_chunks not in _SUPPORTED_CHUNKS
         or packed_rows not in _SUPPORTED_PACKED_ROWS
-        or not (tail_key or natural_key)
+        or not natural_key
         or len(chunk_lengths_values) != num_chunks
         or any(length <= 0 or length > _INPUT_FRAMES for length in chunk_lengths_values)
         or not cu_seqlens_values

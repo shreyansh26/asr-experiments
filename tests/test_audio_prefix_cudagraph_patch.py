@@ -148,29 +148,12 @@ def _encoder() -> SimpleNamespace:
     )
 
 
-def _metadata(total_rows: int = 272):
-    chunks = 21
-    lengths = [13] * chunks
-    lengths[-1] = total_rows - sum(lengths[:-1])
-    offsets = [0]
-    for length in lengths:
-        offsets.append(offsets[-1] + length)
-    return (
-        torch.tensor([100] * chunks, dtype=torch.int64),
-        torch.tensor(lengths + offsets[:-1], dtype=torch.int32),
-        (0, 104, 208, total_rows),
-        (800, 800, 500),
-        (104, 104, total_rows - 208),
-    )
+def _metadata(feature_length: int = 2972):
+    return _natural_metadata(feature_length)
 
 
 def _padded(seed: int = 0) -> torch.Tensor:
-    generator = torch.Generator().manual_seed(seed)
-    return torch.randn(
-        (21, 1, 128, 100),
-        generator=generator,
-        dtype=torch.bfloat16,
-    )
+    return _natural_padded(2972, seed=seed)
 
 
 def _natural_metadata(feature_length: int):
@@ -267,15 +250,15 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
         )
         self.assertIsNotNone(key)
         assert key is not None
-        self.assertEqual(key.padded_shape, (21, 1, 128, 100))
-        self.assertEqual(key.packed_rows, 272)
-        self.assertEqual(key.chunk_lengths_values, tuple([100] * 21))
+        self.assertEqual(key.padded_shape, (30, 1, 128, 100))
+        self.assertEqual(key.packed_rows, 386)
+        self.assertEqual(key.chunk_lengths_values, tuple([100] * 29 + [72]))
         self.assertEqual(key.pack_metadata_values, tuple(pack_metadata.tolist()))
         self.assertEqual(key.cu_seqlens_values, cu_seqlens)
         self.assertEqual(key.feature_lens_values, feature_lens)
         self.assertEqual(key.aftercnn_lens_values, aftercnn_lens)
 
-        altered_feature_lens = (801, 800, 499)
+        altered_feature_lens = (2971,)
         altered_key = _make_prefix_graph_key(
             _padded(),
             chunk_lengths,
@@ -367,11 +350,8 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
             with self.subTest(metadata=altered[2:]):
                 self.assertIsNone(_make_prefix_graph_key(padded, *altered))
 
-    def test_expanded_21_chunk_tail_rows_are_admitted(self) -> None:
-        self.assertEqual(
-            _TAIL_PACKED_ROWS,
-            frozenset(range(263, 274)),
-        )
+    def test_21_chunk_tail_rows_are_not_admitted(self) -> None:
+        self.assertEqual(_TAIL_PACKED_ROWS, frozenset())
         feature_lengths = {
             263: 2020,
             266: 2048,
@@ -389,13 +369,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
                     padded,
                     *metadata,
                 )
-                self.assertIsNotNone(key)
-                assert key is not None
-                self.assertEqual(key.packed_rows, rows)
-                self.assertEqual(key.padded_shape, (21, 1, 128, 100))
-                self.assertEqual(key.padded_stride, (12800, 128, 1, 128))
-                self.assertEqual(key.feature_lens_values, (feature_length,))
-                self.assertEqual(key.aftercnn_lens_values, (rows,))
+                self.assertIsNone(key)
 
         unsupported_padded, unsupported_metadata = _single_audio_tail_case(
             2016,
@@ -661,22 +635,30 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
             max_probation_keys=2,
             warmup_iterations=1,
         )
-        metadata_by_rows = [_metadata(rows) for rows in (264, 265, 267)]
+        feature_lengths = (2897, 2901, 2909)
+        metadata_by_rows = [_metadata(length) for length in feature_lengths]
         keys = [
-            _make_prefix_graph_key(_padded(rows), *metadata)
-            for rows, metadata in zip((264, 265, 267), metadata_by_rows, strict=True)
+            _make_prefix_graph_key(
+                _natural_padded(length, seed=length),
+                *metadata,
+            )
+            for length, metadata in zip(
+                feature_lengths,
+                metadata_by_rows,
+                strict=True,
+            )
         ]
         self.assertTrue(all(key is not None for key in keys))
 
         with torch.inference_mode():
-            for rows, metadata in zip(
-                (264, 265, 267),
+            for length, metadata in zip(
+                feature_lengths,
                 metadata_by_rows,
                 strict=True,
             ):
                 cache.run(
                     encoder,
-                    _padded(rows),
+                    _natural_padded(length, seed=length),
                     *metadata,
                     async_tensor_h2d=None,
                 )
@@ -902,7 +884,7 @@ class AudioPrefixCudaGraphPatchTest(unittest.TestCase):
                     async_tensor_h2d=None,
                 )
 
-        self.assertEqual(output.shape, (272, 1024))
+        self.assertEqual(output.shape, (386, 1024))
         self.assertEqual(cache.entry_count, 0)
         self.assertEqual(cache.rejected_count, 1)
 

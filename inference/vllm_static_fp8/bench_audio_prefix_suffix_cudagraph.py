@@ -15,7 +15,7 @@ from audio_cpu_metadata_pack_patch import (
     run_audio_suffix_eager,
 )
 from audio_prefix_cudagraph_patch import (
-    _TAIL_PACKED_ROWS,
+    _NATURAL_PACKED_ROWS,
     ExactShapeAudioPrefixGraphCache,
 )
 from audio_suffix_cudagraph_patch import ExactShapeAudioSuffixGraphCache
@@ -31,21 +31,13 @@ from vllm.utils.torch_utils import async_tensor_h2d
 
 
 _REPRESENTATIVE_FEATURE_LENGTHS = {
-    263: 2020,
-    264: 2030,
-    265: 2040,
-    266: 2048,
-    267: 2050,
-    268: 2060,
-    269: 2070,
-    270: 2080,
-    271: 2088,
-    272: 2090,
-    273: 2100,
+    377: 2900,
+    **{rows: 2900 + (rows - 377) * 8 for rows in range(378, 390)},
+    390: 3000,
 }
 
 
-def _tail_metadata(total_rows: int) -> tuple[
+def _natural_metadata(total_rows: int) -> tuple[
     torch.Tensor,
     torch.Tensor,
     tuple[int, ...],
@@ -68,7 +60,7 @@ def _tail_metadata(total_rows: int) -> tuple[
     )
 
 
-def _tail_padded(
+def _natural_padded(
     chunk_lengths: torch.Tensor,
     *,
     device: torch.device,
@@ -103,7 +95,7 @@ def _concurrent_chain_gate(
 ) -> None:
     inputs_by_thread = [
         [
-            _tail_padded(
+            _natural_padded(
                 metadata[0],
                 device=device,
                 generator=generator,
@@ -185,7 +177,7 @@ def _concurrent_chain_gate(
 
 def _main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rows", type=int, default=272)
+    parser.add_argument("--rows", type=int, default=384)
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=10)
     parser.add_argument("--concurrency-iterations", type=int, default=2)
@@ -195,8 +187,8 @@ def _main() -> None:
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required")
-    if args.rows not in _TAIL_PACKED_ROWS:
-        raise ValueError("rows must be one of the admitted trace bucket sizes")
+    if args.rows not in _NATURAL_PACKED_ROWS:
+        raise ValueError("rows must be one of the admitted natural chunk sizes")
     if args.warmup <= 0 or args.repeats <= 0 or args.concurrency_iterations <= 0:
         raise ValueError(
             "--warmup, --repeats, and --concurrency-iterations must be positive"
@@ -209,7 +201,7 @@ def _main() -> None:
     device = torch.device("cuda", 0)
     _initialize_single_gpu_distributed(args.master_port)
     encoder = _new_encoder(device)
-    metadata = _tail_metadata(args.rows)
+    metadata = _natural_metadata(args.rows)
     cu_seqlens = torch.tensor(metadata[2], dtype=torch.int32, device=device)
     max_seqlen = torch.tensor(104, dtype=torch.int32, device="cpu")
     prefix_cache = ExactShapeAudioPrefixGraphCache(
@@ -219,7 +211,7 @@ def _main() -> None:
         warmup_iterations=args.warmup,
     )
     generator = torch.Generator(device=device).manual_seed(args.seed)
-    padded = _tail_padded(
+    padded = _natural_padded(
         metadata[0],
         device=device,
         generator=generator,
@@ -272,7 +264,7 @@ def _main() -> None:
         if prefix_cache.entry_count != 1 or suffix_cache.entry_count != 1:
             raise AssertionError("both graph caches must be admitted by call 8")
 
-        other_padded = _tail_padded(
+        other_padded = _natural_padded(
             metadata[0],
             device=device,
             generator=generator,

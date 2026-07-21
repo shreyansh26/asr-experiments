@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate two exact-admitted row-bucket graphs for the audio suffix on CUDA."""
+"""Gate the natural-audio row-bucket graph for the audio suffix on CUDA."""
 
 from __future__ import annotations
 
@@ -419,7 +419,7 @@ def _main() -> None:
         for values in case_values
     ):
         raise ValueError(
-            "Expected at most 25 canonical tail/full-chunk exact keys with a "
+            "Expected at most 14 canonical natural-chunk exact keys with a "
             f"supported total row count in {sorted(_SUPPORTED_ROWS)}"
         )
     if len(set(case_values)) != len(case_values):

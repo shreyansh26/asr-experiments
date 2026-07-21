@@ -383,7 +383,7 @@ def _main() -> None:
         type=_parse_segments,
         help=(
             "Comma-separated exact sequence lengths. Repeat for every observed "
-            "key. Defaults cover all 25 exact keys in both row buckets."
+            "key. Defaults cover all 14 natural keys in one row bucket."
         ),
     )
     parser.add_argument("--warmup", type=int, default=3)

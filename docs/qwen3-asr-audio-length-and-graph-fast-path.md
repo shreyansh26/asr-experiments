@@ -7,8 +7,10 @@ audio-prefix and audio-suffix CUDA graphs.
 
 The implementation described here starts from the selected round-four
 candidate on branch `opt5/audio-prefix-shared-suffix-bucketed`. Follow-up
-branch `opt6/audio-tail-rows-263-271` expands the compatible 21-chunk tail row
-family from seven rows to the contiguous range `M=263..273`. It combines:
+branch `opt6/audio-tail-rows-263-271` experimentally expanded the compatible
+21-chunk tail row family to `M=263..273`. The promoted follow-up deliberately
+removes that workload-derived tail admission and retains graphs only for the
+canonical 29--30 second chunk family. It combines:
 
 - the accepted static-FP8 decoder with fused Q/K RMSNorm, MRoPE, and KV-cache
   write;
@@ -235,10 +237,9 @@ exact feature-length keys reduce to 14 graph-static signatures, one for each
 post-CNN row count `M=377..390`. The signatures share a CUDA graph memory pool
 and are serialized because captures from that pool can alias allocations.
 
-The tail family admits exactly 21 raw convolution chunks with
-`M in {263, ..., 273}` when all other exact metadata guards also pass. The
-21-chunk restriction preserves the captured prefix input topology
-`(21,1,128,100)`; it is an exact CUDA-graph shape guard, not a model limit.
+All other shapes remain eager. In particular, the 21-chunk, 20--21 second tail
+family from the `opt6` experiment is no longer admitted, even if its metadata
+is otherwise compatible.
 
 Implementation:
 
@@ -248,17 +249,14 @@ Implementation:
 ### Suffix CUDA graphs
 
 The suffix graph covers the 24 audio-transformer layers and output projection.
-Exact runtime keys are admitted into two padded graph families:
+Exact runtime keys are admitted into one padded graph family:
 
 ```text
-tail rows M in {263, ..., 273}
-  -> padded graph bucket of 273 rows
-
 natural rows M in {377, ..., 390}
   -> padded graph bucket of 390 rows
 ```
 
-Padding reduces 25 exact suffix shapes to two captured graphs, while exact
+Padding reduces 14 exact suffix shapes to one captured graph, while exact
 pre-admission prevents an unsupported shape or attention layout from replaying
 through a merely equal-sized bucket.
 
@@ -300,10 +298,10 @@ but an original API input longer than 30 seconds is chunked before feature
 extraction. The effective server-created natural range therefore ends at
 30.00 seconds.
 
-## Exact observed tail coverage
+## Historical tail experiment and current exclusion
 
 The 50-second workload produced a second family of approximately 20--21 second
-final chunks. Follow-up branch `opt6/audio-tail-rows-263-271` makes the admitted
+final chunks. Follow-up branch `opt6/audio-tail-rows-263-271` made the admitted
 single-audio feature range continuous across these rows:
 
 | Post-CNN rows `M` | Exact feature lengths `F` | Approximate duration |
@@ -320,12 +318,13 @@ single-audio feature range continuous across these rows:
 | 272 | 2089..2096 | 20.89..<20.97 s |
 | 273 | 2097..2100 | 20.97..<21.01 s |
 
-The expanded family covers `F=2017..2100`, approximately
-`[20.17, 21.01)` seconds, without changing the 273-row suffix bucket. It is
-still workload-informed rather than complete coverage of possible final
-chunks in `(0, 30]` seconds.
+That experimental family covered `F=2017..2100`, approximately
+`[20.17, 21.01)` seconds, without changing the 273-row suffix bucket. The
+promoted natural-only implementation sets the tail admission sets to empty,
+so every row in this table now takes the general eager path. The mapping is
+retained here to explain the experiment and the fixed-50 benchmark stress case.
 
-### Follow-up GPU validation
+### Historical `opt6` GPU validation
 
 On 2026-07-21, GPU1 passed the SM90 suffix helper for all 25 exact keys: the
 11 tail rows `M=263..273` and 14 natural rows `M=377..390`. Every key was
@@ -390,19 +389,19 @@ For an exact 50-second decoded input with one split:
 
 | First chunk | Final tail | Tail rows | Current tail graph? |
 |---:|---:|---:|:---:|
-| 29.0 s | 21.0 s | 273 | Yes |
-| 29.1 s | 20.9 s | 272 | Yes |
-| 29.2 s | 20.8 s | 270 | Yes |
-| 29.3 s | 20.7 s | 269 | Yes |
-| 29.4 s | 20.6 s | 268 | Yes |
-| 29.5 s | 20.5 s | 267 | Yes |
-| 29.6 s | 20.4 s | 265 | Yes |
-| 29.7 s | 20.3 s | 264 | Yes |
-| 29.8 s | 20.2 s | 263 | Yes |
+| 29.0 s | 21.0 s | 273 | No |
+| 29.1 s | 20.9 s | 272 | No |
+| 29.2 s | 20.8 s | 270 | No |
+| 29.3 s | 20.7 s | 269 | No |
+| 29.4 s | 20.6 s | 268 | No |
+| 29.5 s | 20.5 s | 267 | No |
+| 29.6 s | 20.4 s | 265 | No |
+| 29.7 s | 20.3 s | 264 | No |
+| 29.8 s | 20.2 s | 263 | No |
 
-The non-final chunk is graph-eligible in every row. Seven of the nine possible
-exact tails were covered by the original observed tail row family; the
-follow-up expansion covers all nine.
+The non-final chunk is graph-eligible in every row. The final tail is now
+always eager; the previous branches graphed seven and then all nine of these
+fixed-50 tail shapes.
 
 ### Other illustrative file lengths
 
@@ -410,7 +409,7 @@ follow-up expansion covers all nine.
 |---:|---|---|
 | 35 s | approximately 29.x + 5.x s | natural graph, then eager tail |
 | 40 s | approximately 29.x + 10.x s | natural graph, then eager tail |
-| 50 s | approximately 29.x + 20.x s | natural graph, often graphed tail |
+| 50 s | approximately 29.x + 20.x s | natural graph, then eager tail |
 | 59 s | approximately 29.x + 29.x s | both chunks usually natural graphs |
 | 65 s | approximately 29.x + 29.x + 6.x s | two natural graphs, then eager tail |
 
@@ -420,8 +419,8 @@ low-energy split depends on the waveform.
 ## Why the varying 550-file workload still improves
 
 The full 550-file natural workload is not restricted to one audio duration.
-Nevertheless, the selected same-server steady run improved aggregate
-throughput and latency substantially:
+The original selected same-server steady run improved aggregate throughput and
+latency substantially:
 
 | Path | Throughput | Average latency | Average TTFT |
 |---|---:|---:|---:|
@@ -448,6 +447,15 @@ shapes.
 
 Quality measurements and the exact service methodology are recorded in
 [the round-four report](batched-kernel-optimization-round4.md).
+
+The later natural-only run reached `5.717 files/s`, `2.738 s` mean latency,
+and `0.613 s` mean TTFT. Against the adjacent tail-graph run on another H100 of
+the same SKU, that is `+1.08%` throughput, `-1.23%` mean latency, and `-9.99%`
+mean TTFT. The matched fixed-50 stress test moved in the opposite direction:
+removing tail graphs reduced throughput by `5.98%` and increased mean latency
+by `15.33%`. See
+[the natural-only benchmark note](audio-natural-only-cudagraph-benchmark.md)
+for full percentiles and quality results.
 
 ## Cold admission versus steady replay
 
@@ -503,8 +511,8 @@ offset, the per-audio length tuples, and the cumulative attention boundaries.
 - Eight such chunks form the configured 104-row local-attention window.
 - Non-final chunks created by the current long-file splitter naturally land in
   the 29--30 second graph family.
-- The final chunk of a long file can be anywhere in `(0, 30]` seconds, so the
-  current 20--21 second family is useful but not comprehensive.
+- The final chunk of a long file can be anywhere in `(0, 30]` seconds; the
+  promoted path intentionally leaves every non-natural final tail eager.
 - Unsupported shapes use safe eager fallback rather than an approximate graph.
 - The varying 550-file workload benefits because enough of its individual
   server chunks are graph-eligible, even though not every audio is fully

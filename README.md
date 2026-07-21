@@ -20,17 +20,18 @@ packing driven by CPU metadata.
 > latency-prioritized batched track. See [Current results](#current-results)
 > for the complete numbers and comparison boundaries.
 >
-> **Current round-four batched candidate:**
-> `opt5/audio-prefix-shared-suffix-bucketed`
+> **Current promoted audio-graph candidate:**
+> `promote/audio-prefix-shared-suffix-bucketed`
 >
-> This branch layers a shared-prefix CUDA graph pool and a two-bucket
-> audio-suffix CUDA graph cache on top of the stable path. Its clean same-server
-> 550-file natural run reached `5.809 files/s`, `2.696 s` average latency, and
-> `0.629 s` average TTFT versus an adjacent accepted-path mean of
-> `4.803 files/s`, `3.269 s`, and `0.533 s`. CER/WER changed modestly in manual
-> full scoring. See
-> [Batched kernel optimization round 4](docs/batched-kernel-optimization-round4.md)
-> before promoting it.
+> This branch layers a shared-prefix CUDA graph pool and a bucketed audio-suffix
+> CUDA graph cache on top of the stable path. Graph admission is intentionally
+> limited to canonical 29--30 second server chunks; arbitrary final tails,
+> including the 20--21 second shapes observed in the fixed-50 workload, use the
+> eager fallback. The natural-only 550-file batched run reached `5.717 files/s`,
+> `2.738 s` average latency, and `0.613 s` average TTFT with CER `16.47%` and WER
+> `38.62%`. See the
+> [natural-only CUDA-graph benchmark](docs/audio-natural-only-cudagraph-benchmark.md)
+> for the workload-specific tradeoff and comparison boundaries.
 
 All commands below assume the repository root:
 

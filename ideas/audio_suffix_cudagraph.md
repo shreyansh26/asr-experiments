@@ -3,10 +3,10 @@
 ## Status
 
 This is a CUDA-unvalidated research candidate on branch
-`opt3/audio-suffix-cudagraph-probation`, based on concurrent-safe suffix graph
-commit `f6c6967436ce690c84f7bc9095db3dc33ff0a4b5`. No GPU helper, service
-benchmark, or CER/WER run has been performed yet. The launcher must not be
-treated as a winner until all gates below pass.
+`opt3/audio-suffix-cudagraph-natural-hotset`, based on probation commit
+`91878720d7298b323a24600b551895f6b0b77d8f`. No GPU helper, service benchmark,
+or CER/WER run has been performed yet. The launcher must not be treated as a
+winner until all gates below pass.
 
 No PyTorch, vLLM, Triton, or other dependency version changed.
 
@@ -40,14 +40,28 @@ construction, pack allocation, or cache allocation.
 
 ## Exact key and stable state
 
-This bounded experiment accepts only the observed common batched family:
+This bounded experiment accepts exactly 21 canonical keys in two families:
 
 ```text
-cu_seqlens.numel() == 4
-M in {264, 265, 267, 268, 270, 272, 273}
+tail family (7 keys):
+  M in {264, 265, 267, 268, 270, 272, 273}
+  cu_seqlens == (0, 104, 208, M)
+
+natural full-chunk family (14 keys):
+  M in {377, ..., 390}
+  cu_seqlens == (0, 104, 208, 312, M)
+
+both families:
+  max_seqlen == 104
 ```
 
-Each encoder instance owns at most seven graph entries. Sequential warmup calls
+The natural-workload audit found that 5,698 of 6,161 calls (92.5%) have
+`cu_seqlens.numel() == 5`. It also reports that the top nine row-count buckets
+within rows 377-387 cover 91.2%. The contiguous 377-390 bound keeps the admitted
+family simple while covering the neighboring full-chunk tail. These counts are
+workload-audit evidence, not CUDA performance evidence.
+
+Each encoder instance owns at most 21 graph entries. Sequential warmup calls
 have `cu_seqlens.numel() == 2`, so they remain eager and cannot fill or starve
 the intended B16 keys. Each supported exact key also owns a probation counter.
 There is no eviction, LRU, or shape padding. Once full, any unseen exact-content
@@ -66,10 +80,11 @@ The key contains:
 )
 ```
 
-Including the full cumulative-length tuple is required: two requests can have
-the same `M` and number of sequences but different segment boundaries, which
-changes variable-length attention. The tuple comes directly from the accepted
-CPU metadata builder, so keying does not add a CUDA readback.
+Including the full cumulative-length tuple is required because segment
+boundaries change variable-length attention. The tuple comes directly from the
+accepted CPU metadata builder, so keying does not add a CUDA readback. A
+supported row count with any noncanonical boundary fails the key gate and runs
+eager; it does not start probation or consume a graph-cache entry.
 
 Each admitted key retains stable hidden-state, `cu_seqlens`, `max_seqlen`, and
 graph-output tensors plus the `CUDAGraph` for the encoder lifetime. Because a
@@ -119,8 +134,8 @@ duration and start the cumulative replay counter at zero. Replay logs emit
 power-of-two milestones for the per-key cumulative replay count:
 
 ```text
-Audio suffix CUDA graph probation uses eager suffix cu_seqlens=<tuple> observation=<n>/8 occupancy=<n>/7
-Captured bitwise-exact audio suffix CUDA graph cu_seqlens=<tuple> observation=8/8 occupancy=<n>/7 capture_duration_ms=<ms> cumulative_replays=0
+Audio suffix CUDA graph probation uses eager suffix cu_seqlens=<tuple> observation=<n>/8 occupancy=<n>/21
+Captured bitwise-exact audio suffix CUDA graph cu_seqlens=<tuple> observation=8/8 occupancy=<n>/21 capture_duration_ms=<ms> cumulative_replays=0
 ASR audio post-pack suffix CUDA graph replay active cu_seqlens=<tuple> observation=8/8 cumulative_replays=<n>
 ```
 
@@ -171,25 +186,18 @@ rtk env \
   CUDA_VISIBLE_DEVICES=<free-gpu> \
   UV_PROJECT_ENVIRONMENT=/mnt/ssd1/shreyansh/home_dir/asr_experiments/.venv \
   uv run inference/vllm_static_fp8/bench_audio_suffix_cudagraph.py \
-    --segments 88,88,88 \
-    --segments 88,88,89 \
-    --segments 89,89,89 \
-    --segments 89,89,90 \
-    --segments 90,90,90 \
-    --segments 90,91,91 \
-    --segments 91,91,91 \
     --warmup 3 \
     --repeats 10
 ```
 
 The helper instantiates the exact 24-layer, 1024-wide, 16-head, 2048-output
 Qwen3-ASR audio architecture with synthetic BF16 weights. Its defaults cover
-all seven whitelisted row counts; pass additional three-segment cases with the
-same sum to test different `cu_seqlens` contents. It explicitly requires no
-entry after observations one through seven and exactly one new entry on
-observation eight. For every admitted case it then requires:
+all 21 canonical tail and natural keys. Explicit `--segments` values must also
+be canonical; arbitrary equal-row boundaries are rejected. It explicitly
+requires no entry after observations one through seven and exactly one new
+entry on observation eight. For every admitted case it then requires:
 
-- eager versus graph replay bitwise equality on a fresh input;
+- eager versus graph replay bitwise equality on fresh hidden-state content;
 - exact CUDA suffix kernel-name ordering, excluding the required graph input
   copy from that ordering comparison;
 - one distinct admitted graph for every content key;
@@ -210,21 +218,34 @@ concurrency_gate=PASS threads=2 streams=2 iterations=5
 gate=PASS_EXACT_AUDIO_SUFFIX_CUDAGRAPH
 ```
 
-Run a second equal-shape/different-content CUDA gate as well:
+Run a natural-only CUDA gate as well:
 
 ```bash
 rtk env \
   CUDA_VISIBLE_DEVICES=<free-gpu> \
   UV_PROJECT_ENVIRONMENT=/mnt/ssd1/shreyansh/home_dir/asr_experiments/.venv \
   uv run inference/vllm_static_fp8/bench_audio_suffix_cudagraph.py \
-    --segments 88,88,88 \
-    --segments 80,88,96 \
+    --segments 104,104,104,65 \
+    --segments 104,104,104,66 \
+    --segments 104,104,104,67 \
+    --segments 104,104,104,68 \
+    --segments 104,104,104,69 \
+    --segments 104,104,104,70 \
+    --segments 104,104,104,71 \
+    --segments 104,104,104,72 \
+    --segments 104,104,104,73 \
+    --segments 104,104,104,74 \
+    --segments 104,104,104,75 \
+    --segments 104,104,104,76 \
+    --segments 104,104,104,77 \
+    --segments 104,104,104,78 \
     --warmup 3 \
     --repeats 10
 ```
 
-Both cases have `(M, cu_seqlens.numel()) == (264, 4)` but different cumulative
-boundaries, so this invocation proves the content tuple selects distinct graphs.
+This invocation covers rows 377-390 with the required three full 104-row chunks
+and one final partial chunk. Each case uses new random hidden-state content for
+the post-admission eager-versus-replay equality check.
 
 The helper is a capture-protocol gate, while production FP8 correctness is
 additionally checked by the per-key admission logic in the real encoder. Before
@@ -234,9 +255,8 @@ cache-full warning appeared during measured calls.
 
 ## Promotion gate
 
-1. Pass the CUDA helper bitwise and kernel-order gate for representative and
-   observed exact shapes, including equal `(M, N)` with different segment
-   boundaries.
+1. Pass the all-21 and natural-only CUDA helper bitwise, changed-content,
+   kernel-order, probation, and concurrency gates.
 2. Run adjacent accepted/candidate/accepted B16 service controls on the same GPU
    and require replay markers for measured candidate calls.
 3. Reject if priority average latency is neutral or worse, even if host launch

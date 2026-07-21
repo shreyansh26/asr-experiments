@@ -30,8 +30,9 @@ _EXPECTED_LAYER_COUNT = 24
 _INPUT_WIDTH = 1024
 _OUTPUT_WIDTH = 2048
 _EXPECTED_MAX_SEQLEN = 104
-_EXPECTED_CU_SEQLENS_NUMEL = 4
-_SUPPORTED_ROWS = frozenset({264, 265, 267, 268, 270, 272, 273})
+_TAIL_ROWS = frozenset({264, 265, 267, 268, 270, 272, 273})
+_NATURAL_FULL_CHUNK_ROWS = frozenset(range(377, 391))
+_SUPPORTED_ROWS = _TAIL_ROWS | _NATURAL_FULL_CHUNK_ROWS
 _MAX_CACHE_ENTRIES = len(_SUPPORTED_ROWS)
 _WARMUP_ITERATIONS = 3
 _PROBATION_OBSERVATIONS = 8
@@ -74,6 +75,14 @@ def audio_suffix_cudagraph_enabled() -> bool:
     return raw_value == "1"
 
 
+def _canonical_cu_seqlens_values(rows: int) -> tuple[int, ...] | None:
+    if rows in _TAIL_ROWS:
+        return (0, 104, 208, rows)
+    if rows in _NATURAL_FULL_CHUNK_ROWS:
+        return (0, 104, 208, 312, rows)
+    return None
+
+
 def _make_suffix_graph_key(
     hidden_states: torch.Tensor,
     cu_seqlens: torch.Tensor,
@@ -100,19 +109,13 @@ def _make_suffix_graph_key(
 
     values = tuple(int(value) for value in cu_seqlens_values)
     rows = hidden_states.shape[0]
+    canonical_values = _canonical_cu_seqlens_values(rows)
     max_seqlen_value = int(max_seqlen.item())
     if (
         len(values) != cu_seqlens.numel()
-        or len(values) != _EXPECTED_CU_SEQLENS_NUMEL
-        or rows not in _SUPPORTED_ROWS
-        or values[0] != 0
-        or values[-1] != rows
-        or any(left >= right for left, right in zip(values, values[1:]))
+        or canonical_values is None
+        or values != canonical_values
         or max_seqlen_value != _EXPECTED_MAX_SEQLEN
-        or any(
-            right - left > max_seqlen_value
-            for left, right in zip(values, values[1:])
-        )
     ):
         return None
 

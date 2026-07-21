@@ -17,6 +17,7 @@ PATCH_DIR = Path(__file__).resolve().parents[1] / "inference" / "vllm_static_fp8
 sys.path.insert(0, str(PATCH_DIR))
 
 import audio_suffix_cudagraph_patch as suffix_patch  # noqa: E402
+import bench_audio_suffix_cudagraph as suffix_bench  # noqa: E402
 from audio_cpu_metadata_pack_patch import run_audio_suffix_eager  # noqa: E402
 
 
@@ -184,59 +185,137 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         suffix_patch.audio_suffix_cudagraph_enabled()
 
-    def test_exact_key_includes_full_cu_seqlens_contents(self) -> None:
-        hidden_states, cu_seqlens, max_seqlen = _inputs((0, 88, 176, 264))
-        first = suffix_patch._make_suffix_graph_key(
-            hidden_states,
-            cu_seqlens,
-            max_seqlen,
-            (0, 88, 176, 264),
+    def test_canonical_hotset_has_exactly_21_helper_cases(self) -> None:
+        self.assertEqual(
+            suffix_patch._TAIL_ROWS,
+            frozenset({264, 265, 267, 268, 270, 272, 273}),
         )
-        second = suffix_patch._make_suffix_graph_key(
-            hidden_states,
-            cu_seqlens,
-            max_seqlen,
-            (0, 80, 176, 264),
+        self.assertEqual(
+            suffix_patch._NATURAL_FULL_CHUNK_ROWS,
+            frozenset(range(377, 391)),
         )
+        self.assertEqual(len(suffix_patch._SUPPORTED_ROWS), 21)
+        self.assertEqual(suffix_patch._MAX_CACHE_ENTRIES, 21)
+        self.assertEqual(
+            suffix_patch.ExactShapeAudioSuffixGraphCache()._max_entries,
+            21,
+        )
+        self.assertEqual(len(suffix_bench._DEFAULT_CASES), 21)
 
-        self.assertIsNotNone(first)
-        self.assertIsNotNone(second)
-        self.assertEqual(first.rows, 264)
-        self.assertEqual(first.cu_seqlens_numel, 4)
-        self.assertEqual(first.dtype, torch.bfloat16)
-        self.assertEqual(first.max_seqlen_value, 104)
-        self.assertNotEqual(first, second)
+        helper_values = {
+            suffix_bench._cumulative_values(segments)
+            for segments in suffix_bench._DEFAULT_CASES
+        }
+        expected_values = {
+            suffix_patch._canonical_cu_seqlens_values(rows)
+            for rows in suffix_patch._SUPPORTED_ROWS
+        }
+        self.assertEqual(helper_values, expected_values)
 
-    def test_malformed_cpu_metadata_fails_key_closed(self) -> None:
-        hidden_states, cu_seqlens, max_seqlen = _inputs((0, 88, 176, 264))
-        for values in (
-            (1, 88, 176, 264),
-            (0, 88, 176, 263),
-            (0, 88, 88, 264),
-            (0, 264),
-        ):
-            with self.subTest(values=values):
+        for rows in sorted(suffix_patch._SUPPORTED_ROWS):
+            with self.subTest(rows=rows):
+                values = suffix_patch._canonical_cu_seqlens_values(rows)
+                self.assertIsNotNone(values)
+                hidden_states, cu_seqlens, max_seqlen = _inputs(values)
                 key = suffix_patch._make_suffix_graph_key(
                     hidden_states,
                     cu_seqlens,
                     max_seqlen,
                     values,
                 )
-                self.assertIsNone(key)
+                self.assertIsNotNone(key)
+                self.assertEqual(key.rows, rows)
+                self.assertEqual(key.cu_seqlens_numel, len(values))
+                self.assertEqual(key.dtype, torch.bfloat16)
+                self.assertEqual(key.max_seqlen_value, 104)
 
-        invalid_max = max_seqlen.clone().fill_(103)
-        self.assertIsNone(
-            suffix_patch._make_suffix_graph_key(
-                hidden_states,
-                cu_seqlens,
-                invalid_max,
-                (0, 88, 176, 264),
+    def test_noncanonical_boundaries_fail_key_closed(self) -> None:
+        tail_inputs = _inputs((0, 104, 208, 264))
+        for values in (
+            (0, 88, 176, 264),
+            (0, 103, 208, 264),
+            (0, 104, 207, 264),
+            (0, 104, 208, 263),
+            (0, 104, 208, 312, 264),
+        ):
+            with self.subTest(family="tail", values=values):
+                self.assertIsNone(
+                    suffix_patch._make_suffix_graph_key(
+                        *tail_inputs,
+                        values,
+                    )
+                )
+
+        natural_inputs = _inputs((0, 104, 208, 312, 377))
+        for values in (
+            (0, 94, 188, 282, 377),
+            (0, 104, 208, 311, 377),
+            (0, 104, 208, 313, 377),
+            (0, 104, 208, 377),
+            (0, 103, 207, 311, 377),
+        ):
+            with self.subTest(family="natural", values=values):
+                self.assertIsNone(
+                    suffix_patch._make_suffix_graph_key(
+                        *natural_inputs,
+                        values,
+                    )
+                )
+
+        for values in (
+            (0, 104, 208, 266),
+            (0, 104, 208, 269),
+            (0, 104, 208, 271),
+            (0, 104, 208, 312, 376),
+            (0, 104, 208, 312, 391),
+        ):
+            with self.subTest(family="unsupported", values=values):
+                unsupported_inputs = _inputs(values)
+                self.assertIsNone(
+                    suffix_patch._make_suffix_graph_key(
+                        *unsupported_inputs,
+                        values,
+                    )
+                )
+
+        hidden_states, cu_seqlens, max_seqlen = tail_inputs
+        for invalid_max_value in (103, 105):
+            invalid_max = max_seqlen.clone().fill_(invalid_max_value)
+            self.assertIsNone(
+                suffix_patch._make_suffix_graph_key(
+                    hidden_states,
+                    cu_seqlens,
+                    invalid_max,
+                    (0, 104, 208, 264),
+                )
             )
+
+        encoder = _FakeEncoder()
+        backend = _FakeBackend()
+        cache = suffix_patch.ExactShapeAudioSuffixGraphCache(
+            backend=backend,
+            max_entries=2,
+            warmup_iterations=1,
         )
+        noncanonical_inputs = _inputs((0, 88, 176, 264))
+        with torch.inference_mode():
+            expected = run_audio_suffix_eager(
+                encoder,
+                *noncanonical_inputs,
+                cu_seqlens_values=(0, 88, 176, 264),
+            )
+            actual = cache.run(
+                encoder,
+                *noncanonical_inputs,
+                cu_seqlens_values=(0, 88, 176, 264),
+            )
+        self.assertTrue(torch.equal(actual, expected))
+        self.assertEqual(backend.capture_calls, 0)
+        self.assertEqual(cache._observation_counts, {})
 
     def test_eager_suffix_runs_all_layers_and_preserves_rows(self) -> None:
         encoder = _FakeEncoder()
-        hidden_states, cu_seqlens, max_seqlen = _inputs((0, 88, 176, 264))
+        hidden_states, cu_seqlens, max_seqlen = _inputs((0, 104, 208, 264))
 
         with torch.inference_mode():
             output = run_audio_suffix_eager(
@@ -244,13 +323,13 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 hidden_states,
                 cu_seqlens,
                 max_seqlen,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
 
         self.assertEqual(output.shape, (264, 2048))
         self.assertEqual(output.dtype, torch.bfloat16)
 
-    def test_fake_capture_replays_stable_buffers_bitwise(self) -> None:
+    def test_natural_key_replays_changed_hidden_content_bitwise(self) -> None:
         encoder = _FakeEncoder()
         backend = _FakeBackend()
         cache = suffix_patch.ExactShapeAudioSuffixGraphCache(
@@ -258,12 +337,13 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             max_entries=4,
             warmup_iterations=2,
         )
-        hidden_states, cu_seqlens, max_seqlen = _inputs((0, 88, 176, 264))
+        values = (0, 104, 208, 312, 377)
+        hidden_states, cu_seqlens, max_seqlen = _inputs(values)
         key = suffix_patch._make_suffix_graph_key(
             hidden_states,
             cu_seqlens,
             max_seqlen,
-            (0, 88, 176, 264),
+            values,
         )
         self.assertIsNotNone(key)
         self.assertEqual(suffix_patch._PROBATION_OBSERVATIONS, 8)
@@ -275,14 +355,14 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                     hidden_states,
                     cu_seqlens,
                     max_seqlen,
-                    cu_seqlens_values=(0, 88, 176, 264),
+                    cu_seqlens_values=values,
                 )
                 expected_probation = run_audio_suffix_eager(
                     encoder,
                     hidden_states,
                     cu_seqlens,
                     max_seqlen,
-                    cu_seqlens_values=(0, 88, 176, 264),
+                    cu_seqlens_values=values,
                 )
                 self.assertTrue(
                     torch.equal(probation_output, expected_probation)
@@ -300,7 +380,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 hidden_states,
                 cu_seqlens,
                 max_seqlen,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=values,
             )
             replay_input = torch.full_like(hidden_states, 0.75)
             expected = run_audio_suffix_eager(
@@ -308,14 +388,14 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 replay_input,
                 cu_seqlens,
                 max_seqlen,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=values,
             )
             replayed = cache.run(
                 encoder,
                 replay_input,
                 cu_seqlens,
                 max_seqlen,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=values,
             )
             replay_pointer = replayed.data_ptr()
             replay_input_again = replay_input + 0.25
@@ -324,17 +404,17 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 replay_input_again,
                 cu_seqlens,
                 max_seqlen,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=values,
             )
             replayed_again = cache.run(
                 encoder,
                 replay_input_again,
                 cu_seqlens,
                 max_seqlen,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=values,
             )
 
-        self.assertEqual(first.shape, (264, 2048))
+        self.assertEqual(first.shape, (377, 2048))
         self.assertTrue(torch.equal(first, expected_probation))
         self.assertFalse(torch.equal(expected, expected_again))
         self.assertTrue(torch.equal(expected, replayed))
@@ -356,7 +436,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             max_entries=4,
             warmup_iterations=1,
         )
-        inputs = _inputs((0, 88, 176, 264))
+        inputs = _inputs((0, 104, 208, 264))
 
         with (
             torch.inference_mode(),
@@ -367,11 +447,11 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 side_effect=(1_000_000, 3_500_000),
             ),
         ):
-            _admit_key(cache, encoder, inputs, (0, 88, 176, 264))
+            _admit_key(cache, encoder, inputs, (0, 104, 208, 264))
             cache.run(
                 encoder,
                 *inputs,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
 
         probation_calls = [
@@ -382,11 +462,11 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
         self.assertEqual(len(probation_calls), 7)
         self.assertEqual(
             probation_calls[0].args[1:],
-            ((0, 88, 176, 264), 1, 8, 0, 4),
+            ((0, 104, 208, 264), 1, 8, 0, 4),
         )
         self.assertEqual(
             probation_calls[-1].args[1:],
-            ((0, 88, 176, 264), 7, 8, 0, 4),
+            ((0, 104, 208, 264), 7, 8, 0, 4),
         )
         capture_call = next(
             call
@@ -395,7 +475,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
         )
         self.assertEqual(
             capture_call.args[1:],
-            ((0, 88, 176, 264), 8, 8, 1, 4, 2.5),
+            ((0, 104, 208, 264), 8, 8, 1, 4, 2.5),
         )
         replay_call = next(
             call
@@ -404,10 +484,10 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
         )
         self.assertEqual(
             replay_call.args[1:],
-            ((0, 88, 176, 264), 8, 8, 1),
+            ((0, 104, 208, 264), 8, 8, 1),
         )
 
-    def test_same_shape_different_segments_get_distinct_graphs(self) -> None:
+    def test_tail_and_natural_families_get_distinct_graphs(self) -> None:
         encoder = _FakeEncoder()
         backend = _FakeBackend()
         cache = suffix_patch.ExactShapeAudioSuffixGraphCache(
@@ -415,26 +495,30 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             max_entries=4,
             warmup_iterations=1,
         )
-        first_inputs = _inputs((0, 88, 176, 264))
-        second_inputs = _inputs((0, 80, 176, 264))
+        first_inputs = _inputs((0, 104, 208, 264))
+        second_inputs = _inputs((0, 104, 208, 312, 377))
 
         with torch.inference_mode():
             first = _admit_key(
                 cache,
                 encoder,
                 first_inputs,
-                (0, 88, 176, 264),
+                (0, 104, 208, 264),
             )
             second = _admit_key(
                 cache,
                 encoder,
                 second_inputs,
-                (0, 80, 176, 264),
+                (0, 104, 208, 312, 377),
             )
 
         self.assertFalse(torch.equal(first, second))
         self.assertEqual(cache.entry_count, 2)
         self.assertEqual(backend.capture_calls, 2)
+        self.assertEqual(
+            {key.cu_seqlens_numel for key in cache._entries},
+            {4, 5},
+        )
 
     def test_sequential_warmup_shape_cannot_starve_batched_key(self) -> None:
         encoder = _FakeEncoder()
@@ -445,7 +529,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             warmup_iterations=1,
         )
         sequential_inputs = _inputs((0, 264))
-        batched_inputs = _inputs((0, 88, 176, 264))
+        batched_inputs = _inputs((0, 104, 208, 264))
 
         with torch.inference_mode():
             sequential_output = cache.run(
@@ -459,7 +543,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 cache,
                 encoder,
                 batched_inputs,
-                (0, 88, 176, 264),
+                (0, 104, 208, 264),
             )
 
         self.assertEqual(sequential_output.shape, (264, 2048))
@@ -496,8 +580,8 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 return hidden_states.clone()
 
         inputs_by_thread = [
-            _inputs((0, 88, 176, 264), fill=0.5),
-            _inputs((0, 88, 176, 264), fill=0.75),
+            _inputs((0, 104, 208, 264), fill=0.5),
+            _inputs((0, 104, 208, 264), fill=0.75),
         ]
         barrier = threading.Barrier(2)
 
@@ -506,7 +590,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             return suffix_patch.run_audio_suffix_cudagraph(
                 encoder,
                 *inputs,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
 
         with patch.object(
@@ -535,8 +619,8 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             max_entries=2,
             warmup_iterations=1,
         )
-        first_inputs = _inputs((0, 88, 176, 264), fill=0.5)
-        second_inputs = _inputs((0, 88, 176, 264), fill=0.75)
+        first_inputs = _inputs((0, 104, 208, 264), fill=0.5)
+        second_inputs = _inputs((0, 104, 208, 264), fill=0.75)
         barrier = threading.Barrier(2)
 
         with torch.inference_mode():
@@ -544,7 +628,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 cache.run(
                     encoder,
                     *first_inputs,
-                    cu_seqlens_values=(0, 88, 176, 264),
+                    cu_seqlens_values=(0, 104, 208, 264),
                 )
         self.assertEqual(backend.capture_calls, 0)
 
@@ -554,7 +638,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                 return cache.run(
                     encoder,
                     *inputs,
-                    cu_seqlens_values=(0, 88, 176, 264),
+                    cu_seqlens_values=(0, 104, 208, 264),
                 )
 
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -567,12 +651,12 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             first_expected = run_audio_suffix_eager(
                 encoder,
                 *first_inputs,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
             second_expected = run_audio_suffix_eager(
                 encoder,
                 *second_inputs,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
         self.assertTrue(torch.equal(first_output, first_expected))
         self.assertTrue(torch.equal(second_output, second_expected))
@@ -590,22 +674,22 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             max_entries=2,
             warmup_iterations=1,
         )
-        initial_inputs = _inputs((0, 88, 176, 264), fill=0.25)
+        initial_inputs = _inputs((0, 104, 208, 264), fill=0.25)
         with torch.inference_mode():
             _admit_key(
                 cache,
                 encoder,
                 initial_inputs,
-                (0, 88, 176, 264),
+                (0, 104, 208, 264),
             )
 
         inputs_by_thread = [
             [
-                _inputs((0, 88, 176, 264), fill=fill)
+                _inputs((0, 104, 208, 264), fill=fill)
                 for fill in (0.5, 0.625, 0.75)
             ],
             [
-                _inputs((0, 88, 176, 264), fill=fill)
+                _inputs((0, 104, 208, 264), fill=fill)
                 for fill in (1.0, 1.125, 1.25)
             ],
         ]
@@ -620,7 +704,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                         cache.run(
                             encoder,
                             *inputs,
-                            cu_seqlens_values=(0, 88, 176, 264),
+                            cu_seqlens_values=(0, 104, 208, 264),
                         )
                     )
             return outputs
@@ -642,7 +726,7 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
                     expected = run_audio_suffix_eager(
                         encoder,
                         *inputs,
-                        cu_seqlens_values=(0, 88, 176, 264),
+                        cu_seqlens_values=(0, 104, 208, 264),
                     )
                     self.assertTrue(torch.equal(output, expected))
 
@@ -659,30 +743,30 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             max_entries=2,
             warmup_iterations=1,
         )
-        inputs = _inputs((0, 88, 176, 264))
+        inputs = _inputs((0, 104, 208, 264))
 
         with torch.inference_mode():
             expected = run_audio_suffix_eager(
                 encoder,
                 *inputs,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
             for _ in range(7):
                 probation = cache.run(
                     encoder,
                     *inputs,
-                    cu_seqlens_values=(0, 88, 176, 264),
+                    cu_seqlens_values=(0, 104, 208, 264),
                 )
                 self.assertTrue(torch.equal(probation, expected))
             first = cache.run(
                 encoder,
                 *inputs,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
             second = cache.run(
                 encoder,
                 *inputs,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
 
         self.assertTrue(torch.equal(first, expected))
@@ -701,25 +785,25 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             max_entries=1,
             warmup_iterations=1,
         )
-        first_inputs = _inputs((0, 88, 176, 264))
-        second_inputs = _inputs((0, 80, 176, 264))
+        first_inputs = _inputs((0, 104, 208, 264))
+        second_inputs = _inputs((0, 104, 208, 265))
 
         with torch.inference_mode():
             _admit_key(
                 cache,
                 encoder,
                 first_inputs,
-                (0, 88, 176, 264),
+                (0, 104, 208, 264),
             )
             expected = run_audio_suffix_eager(
                 encoder,
                 *second_inputs,
-                cu_seqlens_values=(0, 80, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 265),
             )
             actual = cache.run(
                 encoder,
                 *second_inputs,
-                cu_seqlens_values=(0, 80, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 265),
             )
 
         self.assertTrue(torch.equal(actual, expected))
@@ -734,13 +818,13 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
             max_entries=2,
             warmup_iterations=1,
         )
-        inputs = _inputs((0, 88, 176, 264))
+        inputs = _inputs((0, 104, 208, 264))
 
         with torch.inference_mode():
             output = cache.run(
                 encoder,
                 *inputs,
-                cu_seqlens_values=(0, 88, 176, 264),
+                cu_seqlens_values=(0, 104, 208, 264),
             )
 
         self.assertEqual(output.shape, (264, 2048))

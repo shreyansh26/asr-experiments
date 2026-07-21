@@ -15,9 +15,20 @@ import torch
 from audio_cpu_metadata_pack_patch import run_audio_suffix_eager
 from audio_suffix_cudagraph_patch import (
     _MAX_CACHE_ENTRIES,
+    _NATURAL_FULL_CHUNK_ROWS,
     _PROBATION_OBSERVATIONS,
     _SUPPORTED_ROWS,
+    _TAIL_ROWS,
+    _canonical_cu_seqlens_values,
     ExactShapeAudioSuffixGraphCache,
+)
+
+
+_DEFAULT_CASES = tuple(
+    (104, 104, rows - 208) for rows in sorted(_TAIL_ROWS)
+) + tuple(
+    (104, 104, 104, rows - 312)
+    for rows in sorted(_NATURAL_FULL_CHUNK_ROWS)
 )
 
 
@@ -35,14 +46,18 @@ def _parse_segments(raw_value: str) -> tuple[int, ...]:
     return values
 
 
+def _cumulative_values(segments: tuple[int, ...]) -> tuple[int, ...]:
+    cumulative = [0]
+    for length in segments:
+        cumulative.append(cumulative[-1] + length)
+    return tuple(cumulative)
+
+
 def _cu_metadata(
     segments: tuple[int, ...],
     device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor, tuple[int, ...]]:
-    cumulative = [0]
-    for length in segments:
-        cumulative.append(cumulative[-1] + length)
-    values = tuple(cumulative)
+    values = _cumulative_values(segments)
     cu_seqlens = torch.tensor(values, dtype=torch.int32, device=device)
     max_seqlen = torch.tensor(
         104,
@@ -305,29 +320,23 @@ def _main() -> None:
     if major != 9:
         raise RuntimeError("This production-shape gate requires an SM90 GPU")
 
-    cases = args.segments or [
-        (88, 88, 88),
-        (88, 88, 89),
-        (89, 89, 89),
-        (89, 89, 90),
-        (90, 90, 90),
-        (90, 91, 91),
-        (91, 91, 91),
-    ]
+    cases = args.segments or list(_DEFAULT_CASES)
     if any(max(segments) > 104 for segments in cases):
         raise ValueError(
             "Each segment must be <=104 to match the accepted CPU max-seqlen "
             "contract"
         )
-    if (
-        len(cases) > _MAX_CACHE_ENTRIES
-        or any(len(segments) != 3 for segments in cases)
-        or any(sum(segments) not in _SUPPORTED_ROWS for segments in cases)
+    case_values = [_cumulative_values(segments) for segments in cases]
+    if len(cases) > _MAX_CACHE_ENTRIES or any(
+        values != _canonical_cu_seqlens_values(values[-1])
+        for values in case_values
     ):
         raise ValueError(
-            "Expected at most seven three-segment cases with a supported total "
-            f"row count in {sorted(_SUPPORTED_ROWS)}"
+            "Expected at most 21 canonical tail/full-chunk cases with a "
+            f"supported total row count in {sorted(_SUPPORTED_ROWS)}"
         )
+    if len(set(case_values)) != len(case_values):
+        raise ValueError("Every exact canonical case must be distinct")
     torch.cuda.set_device(0)
     device = torch.device("cuda", 0)
     _initialize_single_gpu_distributed(args.master_port)

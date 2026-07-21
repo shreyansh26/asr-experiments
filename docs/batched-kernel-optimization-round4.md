@@ -185,7 +185,9 @@ because GPU1 became unavailable.
 
 ### Fast-admit prefix-bucket stack
 
-Branch: `opt6/audio-prefix-bucketed-fast-admit`
+Branch: `opt6/audio-prefix-suffix-bucketed-fast-admit`
+
+Commit: `2fb8395085827643c1dc8467f6a9e61cf7392ecc`
 
 Status: GPU/service validation is pending because GPU1 became unavailable.
 This branch should not be compared against the selected winner until it has the

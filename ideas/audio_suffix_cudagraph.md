@@ -2,16 +2,23 @@
 
 ## Status
 
+> **Historical design note.** The two-bucket, 25-key tail experiment below was
+> validated but intentionally not promoted. The final path admits only natural
+> `M=377..390` layouts and maps all 14 exact keys to one padded 390-row graph;
+> every 20--21 second tail stays eager. See the
+> [final implementation guide](../docs/qwen3-asr-audio-length-and-graph-fast-path.md)
+> and [benchmark report](../docs/audio-natural-only-cudagraph-benchmark.md).
+
 The original candidate was developed on branch
 `opt4/audio-suffix-cudagraph-bucketed` and later integrated into selected
 round-four branch `opt5/audio-prefix-shared-suffix-bucketed`.
 
-Follow-up branch `opt6/audio-tail-rows-263-271` expands the tail family to
+Follow-up branch `opt6/audio-tail-rows-263-271` expanded the tail family to
 `M=263..273`. On 2026-07-21, GPU1 passed all 25 exact suffix keys with bitwise
 equality, identical 268-kernel bucket order, alternating retained-output
-checks, and two-thread/two-stream concurrency. End-to-end service and CER/WER
-validation of the expanded family remain pending, so do not promote the
-follow-up from helper evidence alone.
+checks, and two-thread/two-stream concurrency. The family was later excluded
+from promotion to avoid specializing the persistent cache inventory to the
+fixed-50 benchmark's derived final tails.
 
 No PyTorch, vLLM, Triton, or other dependency version changed.
 

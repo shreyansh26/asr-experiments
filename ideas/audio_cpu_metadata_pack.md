@@ -54,10 +54,12 @@ ASR_AUDIO_CPU_MAXSEQLEN=1
 ASR_AUDIO_CPU_METADATA_PACK=1
 ```
 
-Installation checks SHA-256 hashes of the exact installed encoder forward,
-multimodal field factory, audio processing method, and both CNN output-length
-helpers. Runtime guards require the exact Qwen3-ASR-1.7B FlashAttention encoder
-configuration, CUDA BF16
+Installation now requires vLLM `0.24.0+cu129` and checks that the installed
+distribution's `direct_url.json` wheel URL matches a vLLM wheel URL in
+`uv.lock` whose hash equals the pinned SHA-256. This is a declared
+version-and-wheel-provenance guard; it does not hash installed Python function
+source or installed wheel bytes. Runtime guards require the exact
+Qwen3-ASR-1.7B FlashAttention encoder configuration, CUDA BF16
 `[128, total_frames]` features, contiguous CPU integer lengths, inference mode,
 and exact agreement between input lengths, output lengths, and feature storage.
 Unsupported runtime inputs move the two length tensors back to the feature
@@ -155,9 +157,9 @@ the source commits. The README's reproduction commands use the repository's
 normal `predictions/results_fp8_static_qk_audio_cpu_metadata_pack/` hierarchy
 for new runs.
 
-## Decision
+## Decision and final role
 
-Accept and promote this candidate. It improves the prioritized full-set latency
+Accept this candidate as the general audio-metadata layer. It improves the prioritized full-set latency
 by 5.65% over fresh main and 2.74% over CPU max, with corresponding throughput
 gains. The full-set TTFT tradeoff is +12.87% versus main and +1.33% versus CPU
 max, despite the uniform benchmark's small TTFT improvement. CER/WER do not show
@@ -166,3 +168,11 @@ and the small difference from the CPU-max run is within the observed run-level
 quality variation. The exact low-level pack result and removal of all three
 measured metadata synchronization events support promotion for the
 latency-prioritized batched track.
+
+This note's benchmark rows are the historical round-three evidence for that
+layer, not the final endpoint. The promoted server now injects the natural-only
+prefix and suffix CUDA graph runners into this same metadata-aware forward.
+Graph misses continue through this CPU-metadata/Triton eager path; only a
+metadata compatibility/runtime-guard miss returns to the original vLLM
+forward. Current composed results are in
+[`docs/audio-natural-only-cudagraph-benchmark.md`](../docs/audio-natural-only-cudagraph-benchmark.md).

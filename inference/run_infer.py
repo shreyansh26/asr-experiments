@@ -18,7 +18,7 @@ from server_utils import reset_prefix_cache
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_ROOT = REPO_ROOT / "data" / "prepared_data"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "predictions" / "results" / "sequential_predicted"
-WARMUP_AUDIO_COUNT = 20
+DEFAULT_WARMUP_FILES = 20
 
 
 class PreparedAudio(NamedTuple):
@@ -44,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-url", default="http://localhost:8090/v1")
     parser.add_argument("--stream", action="store_true")
     parser.add_argument("--num-files", type=int, default=None)
+    parser.add_argument("--warmup-files", type=int, default=DEFAULT_WARMUP_FILES)
     parser.add_argument("--uniform-audio-length", type=float, default=None)
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
     parser.add_argument("--max-tokens", type=int, default=512)
@@ -163,6 +164,8 @@ def main() -> None:
     args = parse_args()
     if args.num_files is not None and args.num_files < 0:
         raise ValueError("--num-files must be >= 0")
+    if args.warmup_files < 0:
+        raise ValueError("--warmup-files must be >= 0")
     if args.uniform_audio_length is not None and args.uniform_audio_length <= 0:
         raise ValueError("--uniform-audio-length must be > 0")
     if args.timeout_seconds <= 0:
@@ -215,7 +218,7 @@ def main() -> None:
     if print_text is None:
         print_text = args.audio_path is not None
 
-    warmup_count = 0 if args.audio_path is not None else WARMUP_AUDIO_COUNT
+    warmup_count = 0 if args.audio_path is not None else args.warmup_files
     required_payload_count = (
         None if args.num_files is None else warmup_count + args.num_files
     )

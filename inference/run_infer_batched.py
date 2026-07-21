@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_ROOT = REPO_ROOT / "data" / "prepared_data"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "predictions" / "results" / "batched_predicted"
 STOP_WRITER = object()
-WARMUP_AUDIO_COUNT = 20
+DEFAULT_WARMUP_FILES = 20
 
 
 class WriteJob(NamedTuple):
@@ -59,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stream", action="store_true")
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--num-files", type=int, default=None)
+    parser.add_argument("--warmup-files", type=int, default=DEFAULT_WARMUP_FILES)
     parser.add_argument("--uniform-audio-length", type=float, default=None)
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
     parser.add_argument("--max-tokens", type=int, default=512)
@@ -204,6 +205,8 @@ def main() -> None:
         raise ValueError("--workers must be >= 1")
     if args.num_files is not None and args.num_files < 0:
         raise ValueError("--num-files must be >= 0")
+    if args.warmup_files < 0:
+        raise ValueError("--warmup-files must be >= 0")
     if args.uniform_audio_length is not None and args.uniform_audio_length <= 0:
         raise ValueError("--uniform-audio-length must be > 0")
     if args.timeout_seconds <= 0:
@@ -249,13 +252,13 @@ def main() -> None:
     if args.num_files is None:
         print(
             f"Preparing usable audio payloads from {len(eligible_audio_paths)} "
-            f"eligible files (warmup={WARMUP_AUDIO_COUNT} measured=all remaining)"
+            f"eligible files (warmup={args.warmup_files} measured=all remaining)"
         )
     else:
         print(
-            f"Preparing {WARMUP_AUDIO_COUNT + args.num_files} usable audio payloads "
+            f"Preparing {args.warmup_files + args.num_files} usable audio payloads "
             f"from {len(eligible_audio_paths)} eligible files "
-            f"(warmup={WARMUP_AUDIO_COUNT} measured={args.num_files})"
+            f"(warmup={args.warmup_files} measured={args.num_files})"
         )
     print(f"Writing predictions under {output_root}")
 
@@ -263,7 +266,7 @@ def main() -> None:
     for audio_path in eligible_audio_paths:
         output_path = prediction_path(audio_path, input_root, output_root)
         output_exists = (
-            len(prepared_warmup_jobs) >= WARMUP_AUDIO_COUNT
+            len(prepared_warmup_jobs) >= args.warmup_files
             and output_path.exists()
         )
         if output_exists and not args.overwrite:
@@ -277,7 +280,7 @@ def main() -> None:
         if prepared is None:
             skipped_no_speech += 1
             continue
-        if len(prepared_warmup_jobs) < WARMUP_AUDIO_COUNT:
+        if len(prepared_warmup_jobs) < args.warmup_files:
             prepared_warmup_jobs.append(prepared)
             continue
         prepared_jobs.append(prepared)
@@ -285,15 +288,15 @@ def main() -> None:
             break
 
     prepare_wall_s = perf_counter() - prepare_start_time
-    if len(prepared_warmup_jobs) < WARMUP_AUDIO_COUNT:
+    if len(prepared_warmup_jobs) < args.warmup_files:
         raise ValueError(
-            f"Need {WARMUP_AUDIO_COUNT} usable warmup audio payloads, "
+            f"Need {args.warmup_files} usable warmup audio payloads, "
             f"found {len(prepared_warmup_jobs)} after filtering"
         )
     if args.num_files is not None and len(prepared_jobs) < args.num_files:
         raise ValueError(
             f"Need {args.num_files} usable benchmark audio payloads after "
-            f"{WARMUP_AUDIO_COUNT} warmup payloads, found {len(prepared_jobs)}"
+            f"{args.warmup_files} warmup payloads, found {len(prepared_jobs)}"
         )
 
     print(

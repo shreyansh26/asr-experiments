@@ -13,6 +13,10 @@ import torch
 
 from audio_cpu_maxseqlen_patch import install_audio_cpu_maxseqlen_patch
 from audio_cpu_metadata_pack_patch import install_audio_cpu_metadata_pack_patch
+from audio_suffix_cudagraph_patch import (
+    audio_suffix_cudagraph_enabled,
+    install_audio_suffix_cudagraph_patch,
+)
 from qk_mrope_fusion_patch import install_qk_mrope_fusion_patch
 
 from vllm.logger import init_logger
@@ -40,7 +44,9 @@ if os.environ.get("ASR_QK_MROPE_FUSION", "0") == "1":
     install_qk_mrope_fusion_patch()
 if os.environ.get("ASR_AUDIO_CPU_MAXSEQLEN", "0") == "1":
     install_audio_cpu_maxseqlen_patch()
-if os.environ.get("ASR_AUDIO_CPU_METADATA_PACK", "0") == "1":
+if audio_suffix_cudagraph_enabled():
+    install_audio_suffix_cudagraph_patch()
+elif os.environ.get("ASR_AUDIO_CPU_METADATA_PACK", "0") == "1":
     install_audio_cpu_metadata_pack_patch()
 
 SCALES_ENV = "ASR_FP8_STATIC_SCALES_JSON"

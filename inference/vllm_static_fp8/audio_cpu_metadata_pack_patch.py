@@ -305,12 +305,37 @@ def _lengths_on_device(
     return lengths.to(device=device, non_blocking=True)
 
 
+def run_audio_suffix_eager(
+    encoder: Any,
+    hidden_states: torch.Tensor,
+    cu_seqlens: torch.Tensor,
+    max_seqlen: torch.Tensor | None,
+    *,
+    cu_seqlens_values: tuple[int, ...] | None = None,
+) -> torch.Tensor:
+    """Run only the post-pack transformer and projection suffix."""
+    del cu_seqlens_values
+    for encoder_layer in encoder.layers:
+        hidden_states = encoder_layer(
+            hidden_states,
+            cu_seqlens,
+            max_seqlen,
+        )
+
+    hidden_states = encoder.ln_post(hidden_states)
+    hidden_states = encoder.proj1(hidden_states)
+    hidden_states = encoder.act(hidden_states)
+    hidden_states = encoder.proj2(hidden_states)
+    return hidden_states
+
+
 def _make_patched_forward(
     original_forward: Any,
     *,
     model_cls: type[Any],
     flash_backend: Any,
     async_tensor_h2d: Any,
+    suffix_runner: Any | None = None,
 ) -> Any:
     @wraps(original_forward)
     def patched_forward(
@@ -388,18 +413,14 @@ def _make_patched_forward(
         )
         max_seqlen = self.compute_attn_mask_seqlen(cu_seqlens)
 
-        for encoder_layer in self.layers:
-            hidden_states = encoder_layer(
-                hidden_states,
-                cu_seqlens,
-                max_seqlen,
-            )
-
-        hidden_states = self.ln_post(hidden_states)
-        hidden_states = self.proj1(hidden_states)
-        hidden_states = self.act(hidden_states)
-        hidden_states = self.proj2(hidden_states)
-        return hidden_states
+        selected_suffix_runner = suffix_runner or run_audio_suffix_eager
+        return selected_suffix_runner(
+            self,
+            hidden_states,
+            cu_seqlens,
+            max_seqlen,
+            cu_seqlens_values=tuple(cu_seqlens_cpu),
+        )
 
     setattr(patched_forward, _PATCH_MARKER, True)
     return patched_forward
@@ -424,7 +445,10 @@ def _make_cpu_field_config(
     return patched_field_config
 
 
-def install_audio_cpu_metadata_pack_patch() -> bool:
+def install_audio_cpu_metadata_pack_patch(
+    *,
+    suffix_runner: Any | None = None,
+) -> bool:
     """Install the exact-version CPU-metadata audio encoder fast path."""
     if not audio_cpu_metadata_pack_enabled():
         return False
@@ -467,6 +491,7 @@ def install_audio_cpu_metadata_pack_patch() -> bool:
         model_cls=model_cls,
         flash_backend=AttentionBackendEnum.FLASH_ATTN,
         async_tensor_h2d=async_tensor_h2d,
+        suffix_runner=suffix_runner,
     )
     patched_field_config = _make_cpu_field_config(
         current_field_config,

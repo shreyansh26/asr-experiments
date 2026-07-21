@@ -176,7 +176,7 @@ Triton/FA4/FlashInfer attention replacements, FP8 KV cache, FP8/INT8 heads,
 sampler/argmax variants, generic vLLM fusion flags, CUDA-graph tuning, and
 server/runtime knobs. Those were not repeated.
 
-## In-flight exact conv1 fusion
+## GPU-gated exact convolution fusions
 
 Branch: `opt3/audio-conv1-bias-gelu`
 
@@ -202,7 +202,25 @@ C=448:5606.992 -> 3766.976 us (-32.8%)
 Promotion is pending a real B16 service A/B. No package was installed or
 upgraded; the alternate bitcode file was already present in the shared venv.
 
-## In-flight clustered split-K down projection
+A separate follow-up branch, `opt3/audio-all-conv-bias-gelu` at commit
+`1a28189`, generalizes the same guarded exact post-op to all three convolution
+geometries:
+
+```text
+conv1: [C, 1,   128, 100] -> [C, 480, 64, 50]
+conv2: [C, 480,  64,  50] -> [C, 480, 32, 25]
+conv3: [C, 480,  32,  25] -> [C, 480, 16, 13]
+```
+
+It incorporates the accepted `int32` metadata and atomic-install fixes, pins
+the final copied-source hash, fails loud on invalid environment values, and
+rejects ambiguous in-process conv1/all-conv mode switches. Its 45 combined CPU
+tests, fake-tensor/export custom-op gates, launcher checks, and fresh install
+gate pass. The dedicated CUDA helper and service launcher are committed, but
+were not run because no GPU was safely available after the branch became
+ready. Detailed note: `opt3/audio-all-conv-bias-gelu:ideas/audio_all_conv_bias_gelu.md`.
+
+## GPU-gated clustered split-K down projection
 
 Branch: `opt3/decode-down-cluster-splitk`
 
@@ -247,7 +265,11 @@ the gain.
 ## Current integration state
 
 Nothing in this round has been merged into `main`. The accepted metadata branch
-is the current promotion candidate. The conv1 and clustered split-K branches
-remain independent until their service or kernel gates complete; if either is
-accepted, it should first be composed with `299bb3a` in a separate integration
-branch and rerun against the full quality set.
+is the current promotion candidate. At the final runtime gate on 2026-07-20,
+all eight local H100s were occupied by unrelated jobs; no process was stopped,
+no shared-GPU timing was taken, and vLLM memory utilization was not reduced to
+force coexistence. The conv1, all-conv, and clustered split-K branches therefore
+remain independent and explicitly unpromoted until their CUDA helper/service
+gates can run on an idle GPU. If one passes, compose it from the accepted
+metadata branch in a separate integration branch and rerun the full quality
+set.

@@ -7,31 +7,22 @@ runs sequential and concurrent inference, measures latency, time to first token
 for kernel-level optimization work.
 
 The supported precision paths are BF16, vLLM dynamic FP8, calibrated
-static-activation FP8, and an optimized static-FP8 path with custom Triton
-kernels for Q/K RMSNorm, MRoPE, paged KV-cache writes, and exact audio-row
-packing driven by CPU metadata.
+static-activation FP8, and an optimized static-FP8 stack with custom Triton
+kernels for Q/K RMSNorm, MRoPE, paged KV-cache writes, CPU-built audio
+metadata, an exact valid-row pack, and guarded audio-encoder CUDA graph caches.
 
-> **Current stable optimized path:**
-> `bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh`
+> **Current optimized path:**
+> `PORT=8091 bash inference/run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh`
 >
-> Against a fresh full main-branch control, this path improved throughput by
-> 5.91% and average latency by 5.65%, with slightly better CER/WER. Average
-> TTFT regressed by 12.87%, so it is promoted specifically for the
-> latency-prioritized batched track. See [Current results](#current-results)
-> for the complete numbers and comparison boundaries.
->
-> **Current promoted audio-graph candidate:**
-> `promote/audio-prefix-shared-suffix-bucketed`
->
-> This branch layers a shared-prefix CUDA graph pool and a bucketed audio-suffix
-> CUDA graph cache on top of the stable path. Graph admission is intentionally
-> limited to canonical 29--30 second server chunks; arbitrary final tails,
-> including the 20--21 second shapes observed in the fixed-50 workload, use the
-> eager fallback. The natural-only 550-file batched run reached `5.717 files/s`,
-> `2.738 s` average latency, and `0.613 s` average TTFT with CER `16.47%` and WER
-> `38.62%`. See the
-> [natural-only CUDA-graph benchmark](docs/audio-natural-only-cudagraph-benchmark.md)
-> for the workload-specific tradeoff and comparison boundaries.
+> The final natural-only graph policy admits canonical 29--30 second server
+> chunks and leaves arbitrary final tails on the general eager path. In the
+> refreshed 550-file, 16-worker benchmark it reached `5.722 files/s`, latency
+> p50/p95/p99 of `2.521/4.830/6.653 s`, and TTFT p50/p95/p99 of
+> `0.543/1.328/1.759 s`, with CER `0.160` and WER `0.382`. Relative to the
+> fused static-FP8 decoder control, throughput improved `24.28%` and latency
+> percentiles improved `19.64--23.04%`; TTFT p50/p95 regressed while p99 was
+> effectively unchanged. See [Current results](#current-results) and the
+> [final CUDA-graph report](docs/audio-natural-only-cudagraph-benchmark.md).
 
 All commands below assume the repository root:
 
@@ -85,7 +76,8 @@ Start one vLLM server in the first terminal. The latency-optimized batched
 static-FP8 launcher is the recommended starting point:
 
 ```bash
-bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh
+PORT=8091 \
+  bash inference/run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh
 ```
 
 In a second terminal, run the two standard batched benchmarks and print the
@@ -100,7 +92,8 @@ uv run inference/run_benchmark.py \
   --uniform-audio-length 50 \
   --num-files 100 \
   --input-root data/prepared_data \
-  --output-root predictions/results_fp8_static_qk_audio_cpu_metadata_pack/batched_predicted_uniform_audio_length_50s
+  --warmup-files 100 \
+  --output-root predictions/results_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph_no_tail/batched_predicted_uniform_audio_length_50s
 
 # Full workload; also computes aggregate CER/WER.
 uv run inference/run_benchmark.py \
@@ -108,16 +101,21 @@ uv run inference/run_benchmark.py \
   --workers 16 \
   --overwrite \
   --input-root data/prepared_data \
-  --output-root predictions/results_fp8_static_qk_audio_cpu_metadata_pack/batched_predicted
+  --warmup-files 20 \
+  --output-root predictions/results_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph_no_tail/batched_predicted
 
 uv run inference/analyse_results.py --mode batched
 ```
 
-The inference scripts expect the OpenAI-compatible server at:
+`run_benchmark.py` currently defaults to the quick-start server at:
 
 ```text
-http://localhost:8090/v1
+http://localhost:8091/v1
 ```
+
+The direct `run_infer.py`/`run_infer_batched.py` clients and most launchers
+default to port 8090. Keep `PORT` and `--base-url` paired when using a different
+launcher or client combination.
 
 Choose one server precision:
 
@@ -136,6 +134,10 @@ bash inference/run_vllm_fp8_static_qk_prefill.sh
 
 # The fused decoder path plus CPU audio metadata and exact Triton row packing.
 bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh
+
+# Current best: CPU metadata plus natural-only prefix and suffix graph caches.
+PORT=8091 \
+  bash inference/run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh
 ```
 
 The inference and benchmark scripts reset vLLM prefix cache before each run.
@@ -165,7 +167,7 @@ SCALES_JSON=inference/results/fp8_static_scales_custom.json \
 If the server runs elsewhere, pass `--base-url`.
 
 For a controlled precision comparison, start exactly one server at a time and
-give every configuration its own output root. The complete four-run matrix is
+give every configuration its own output root. The complete comparison matrix is
 documented under [Precision comparison workflow](#precision-comparison-workflow).
 
 ## Data and artifact layout
@@ -183,6 +185,8 @@ predictions/results_bf16/                 # BF16 comparison benchmark outputs
 predictions/results_fp8_dynamic/          # dynamic-FP8 comparison benchmark outputs
 predictions/results_fp8_static/           # static-FP8 comparison/default wrapper outputs
 predictions/results_fp8_static_qk_prefill/ # static-FP8 Q/K fusion benchmark outputs
+predictions/results_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph_no_tail/
+                                             # current natural-only graph outputs
 ```
 
 Prepared data and predictions use the same relative path layout, for example:
@@ -544,20 +548,20 @@ the next precision:
 | `fp8_static` | `bash inference/run_vllm_fp8_static.sh` |
 | `fp8_static_qk_prefill` | `bash inference/run_vllm_fp8_static_qk_prefill.sh` |
 | `fp8_static_qk_audio_cpu_metadata` | `bash inference/run_vllm_fp8_static_qk_prefill_audio_cpu_metadata_pack.sh` |
-| `fp8_static_qk_audio_prefix_suffix_cudagraph` | `PORT=8091 MODEL=/mnt/ssd2/hf_models/models--Qwen--Qwen3-ASR-1.7B/snapshots/7278e1e70fe206f11671096ffdd38061171dd6e5 bash inference/run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh --gpu-memory-utilization 0.75` |
+| `fp8_static_qk_prefill_audio_prefix_suffix_cudagraph` | `PORT=8091 MODEL=/mnt/ssd2/hf_models/models--Qwen--Qwen3-ASR-1.7B/snapshots/7278e1e70fe206f11671096ffdd38061171dd6e5 bash inference/run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh --gpu-memory-utilization 0.75` |
 
 Use precision-specific output roots. This keeps prediction files isolated and
 allows `analyse_results.py` to infer the precision from the recorded path:
 
 ```bash
-# Set this to bf16, fp8_dynamic, fp8_static, fp8_static_qk_prefill, or
-# fp8_static_qk_audio_cpu_metadata for the matching running server.
-PRECISION=fp8_static_qk_audio_cpu_metadata
+# Set this to the output-root label for the matching running server.
+PRECISION=fp8_static_qk_prefill_audio_prefix_suffix_cudagraph_no_tail
 
 # Full sequential benchmark; --overwrite also enables aggregate CER/WER scoring.
 uv run python inference/run_benchmark.py \
   --mode sequential \
   --output-root "predictions/results_${PRECISION}/sequential_predicted" \
+  --warmup-files 20 \
   --overwrite
 
 # Sequential benchmark limited to the first 50 seconds of eligible files.
@@ -565,6 +569,7 @@ uv run python inference/run_benchmark.py \
   --mode sequential \
   --uniform-audio-length 50 \
   --num-files 100 \
+  --warmup-files 100 \
   --overwrite \
   --output-root "predictions/results_${PRECISION}/sequential_predicted_uniform_audio_length_50s"
 
@@ -573,6 +578,7 @@ uv run python inference/run_benchmark.py \
   --mode batched \
   --workers 16 \
   --output-root "predictions/results_${PRECISION}/batched_predicted" \
+  --warmup-files 20 \
   --overwrite
 
 # 16-worker, 50-second load test.
@@ -581,6 +587,7 @@ uv run python inference/run_benchmark.py \
   --workers 16 \
   --uniform-audio-length 50 \
   --num-files 100 \
+  --warmup-files 100 \
   --overwrite \
   --output-root "predictions/results_${PRECISION}/batched_predicted_uniform_audio_length_50s"
 ```
@@ -594,16 +601,15 @@ uv run python inference/analyse_results.py --mode batched
 
 ### Current results
 
-Rows through `FP8 static + Q/K fusion` are the committed workspace snapshot
-from `inference/results/sequential.csv` and `inference/results/batched.csv`.
-The newer CPU-metadata row and its fresh main control come from the local
-round-three campaign documented in
-[the experiment note](ideas/audio_cpu_metadata_pack.md); prediction trees and
-appended CSV rows are generated evidence and are deliberately excluded from
-source commits. A clean clone therefore reproduces the implementation and the
-reported commands, but `analyse_results.py` will print the CPU-metadata row
-only after those benchmarks are rerun. Latency and TTFT values are seconds;
-throughput is completed files per second.
+These are the rows currently selected from `inference/results/sequential.csv`
+and `inference/results/batched.csv` by `analyse_results.py`. Latency and TTFT
+values are seconds; throughput is completed files per second. The refreshed
+final fixed-50 rows used 100 warm-up files, while most older fixed-50 controls
+printed beside them used 20. The full rows used 20 warm-ups but were collected
+on different dates and server lifetimes. Percentage deltas below are snapshot
+comparisons, not matched causal A/B estimates or confidence intervals.
+Generated predictions and appended CSV evidence remain local benchmark
+artifacts rather than source-controlled fixtures.
 
 `FP8 static + Q/K fusion` uses the dedicated launcher above. The optimization
 runs in decode and prefill: it combines Q/K RMSNorm, three-axis MRoPE, and the
@@ -612,20 +618,16 @@ prefill-specific head grouping. See
 [the technical design](docs/qk-mrope-kv-cache-fusion.md) for the execution flow,
 specialization boundaries, and Nsight evidence.
 
-`FP8 static + Q/K + CPU metadata` layers two exact audio-encoder changes on
-that decoder path. A cached CPU max-seqlen removes 24 scalar CUDA readbacks per
-audio pass. CPU length/attention metadata plus one Triton valid-row copy removes
-the other seven measured steady-state stream synchronizations. See
-[the round-three result](ideas/audio_cpu_metadata_pack.md) for guards, helper
-correctness, repeated A/B measurements, and the full quality gate.
-
-In the older committed snapshots, Q/K fusion versus base static FP8 gained
-5.8% throughput, improved full 16-worker batched latency percentiles by
-6.0-8.1%, and improved TTFT percentiles by 9.2-11.2%. The full sequential
-snapshot gained 5.0% throughput and improved latency percentiles by 4.8-5.3%,
-with slightly worse TTFT. Those rows were collected on different dates and are
-single workspace snapshots, not an interleaved statistical comparison. The
-CPU-metadata decision instead uses the fresh direct controls stated below.
+The final row adds two audio-encoder layers. First, CPU length metadata and a
+single Triton row pack remove synchronization-heavy GPU scalar/list
+materialization; the CPU max-seqlen cache also removes the repeated scalar
+readback in all 24 audio-transformer layers. Second, exact-admitted CUDA graph
+caches replay the 29--30 second convolution/projection/pack prefix and the
+24-layer/projection suffix. Graph-ineligible durations or metadata that still
+satisfy the CPU runtime guard use CPU metadata plus eager prefix/suffix;
+runtime-guard misses delegate to original vLLM. See the
+[audio-length and fast-path guide](docs/qwen3-asr-audio-length-and-graph-fast-path.md)
+for the complete data flow and admission contract.
 
 Sequential, full benchmark with 550 measured files:
 
@@ -635,6 +637,7 @@ Sequential, full benchmark with 550 measured files:
 | FP8 dynamic | 1.473 | 2.929 | 3.732 | 0.201 | 0.309 | 0.339 | 0.640 | 0.165 | 0.385 |
 | FP8 static | 1.381 | 2.745 | 3.439 | 0.207 | 0.339 | 0.372 | 0.682 | 0.162 | 0.384 |
 | FP8 static + Q/K fusion | 1.315 | 2.599 | 3.275 | 0.220 | 0.341 | 0.373 | 0.716 | 0.163 | 0.385 |
+| **FP8 static + Q/K + CPU metadata + natural audio graphs** | **1.214** | **2.494** | **3.110** | **0.203** | **0.301** | **0.329** | **0.763** | **0.160** | **0.383** |
 
 Sequential, 100 measured files with a 50-second audio limit:
 
@@ -644,6 +647,7 @@ Sequential, 100 measured files with a 50-second audio limit:
 | FP8 dynamic | 0.286 | 0.479 | 0.634 | 0.046 | 0.060 | 0.064 | 3.409 |
 | FP8 static | 0.273 | 0.468 | 0.489 | 0.059 | 0.075 | 0.090 | 3.538 |
 | FP8 static + Q/K fusion | 0.262 | 0.451 | 0.473 | 0.063 | 0.087 | 0.091 | 3.731 |
+| **FP8 static + Q/K + CPU metadata + natural audio graphs** | **0.202** | **0.333** | **0.398** | **0.050** | **0.063** | **0.077** | **4.551** |
 
 Batched, full benchmark with 550 measured files:
 
@@ -657,7 +661,7 @@ Batched, full benchmark with 550 measured files:
 | FP8 dynamic | 16 | 3.563 | 7.166 | 9.903 | 0.343 | 1.121 | 1.838 | 4.104 | 0.158 | 0.380 |
 | FP8 static | 16 | 3.346 | 6.675 | 9.124 | 0.426 | 1.177 | 1.984 | 4.352 | 0.162 | 0.384 |
 | FP8 static + Q/K fusion | 16 | 3.137 | 6.276 | 8.382 | 0.385 | 1.069 | 1.761 | 4.604 | 0.166 | 0.387 |
-| FP8 static + Q/K + CPU metadata (local round-three run) | 16 | **3.095** | **6.012** | 8.459 | 0.426 | 1.238 | 2.188 | **4.750** | 0.164 | 0.385 |
+| **FP8 static + Q/K + CPU metadata + natural audio graphs** | **16** | **2.521** | **4.830** | **6.653** | 0.543 | 1.328 | **1.759** | **5.722** | **0.160** | **0.382** |
 
 Batched, 16 workers and 100 measured files with a 50-second audio limit:
 
@@ -671,31 +675,33 @@ Batched, 16 workers and 100 measured files with a 50-second audio limit:
 | FP8 dynamic | 16 | 0.735 | 1.279 | 1.481 | 0.154 | 0.432 | 0.499 | 20.731 |
 | FP8 static | 16 | 0.652 | 1.098 | 1.212 | 0.119 | 0.306 | 0.332 | 22.171 |
 | FP8 static + Q/K fusion | 16 | 0.636 | 1.226 | 1.424 | 0.122 | 0.499 | 0.614 | 22.635 |
-| FP8 static + Q/K + CPU metadata (local round-three run) | 16 | 0.653 | 1.112 | 1.226 | 0.195 | 0.468 | 0.569 | 22.308 |
+| **FP8 static + Q/K + CPU metadata + natural audio graphs** | **16** | **0.426** | **0.890** | **1.008** | **0.086** | **0.216** | **0.227** | **28.192** |
 
-The CPU-metadata row is backed by more than the single snapshots rendered in
-the percentile tables. Six 100-file candidate runs averaged 22.1708 files/s,
-0.6743 s latency, and 0.1928 s TTFT. A time-adjacent three-run CPU-max control
-averaged 21.186 files/s, 0.7080 s latency, and 0.1987 s TTFT. The full candidate
-completed all 550 measured files at 4.750 files/s, 3.304 s average latency,
-0.535 s average TTFT, 0.163614 CER, and 0.384638 WER. Against a fresh full main
-control at 4.485 files/s, 3.502 s latency, 0.474 s TTFT, 0.163900 CER, and
-0.385612 WER, that is +5.91% throughput, -5.65% latency, and +12.87% TTFT,
-with no quality degradation.
+Relative to the displayed `FP8 static + Q/K fusion` snapshot, the final
+16-worker full-workload row
+improves throughput by `24.28%` and latency p50/p95/p99 by
+`19.64%/23.04%/20.63%`. TTFT p50 and p95 regress by `41.04%` and `24.23%`,
+while TTFT p99 improves by `0.11%`. On fixed-50 it improves throughput by
+`24.55%`, latency percentiles by `27.41--33.02%`, and TTFT percentiles by
+`29.51--63.03%`, even though only the natural first chunk is graphed and the
+approximately 20--21 second tail remains eager.
+
+The sequential improvements versus the displayed fused snapshot are smaller
+on the varying full workload: `+6.56%` throughput, `4.04--7.68%` lower latency
+percentiles, and `7.73--11.80%` lower TTFT percentiles. The fixed-50 sequential
+row gains `21.98%` throughput. These comparisons are direct calculations from
+the rounded rows printed by `analyse_results.py`, not confidence intervals.
 
 Static FP8 currently has batched comparison rows only at 16 workers; the table
 does not imply unmeasured 4- or 8-worker static results. CER/WER is `n/a` for
 rows that were not recorded through the wrapper's full overwrite-and-score
 path. The 50-second runs are intentionally not scored by the wrapper.
 
-The older unrounded full sequential quality change from static FP8 to the fused
-decoder path is CER `0.162277 -> 0.162677` and WER
-`0.384183 -> 0.384538`. Its older full batched snapshot moved CER
-`0.161949 -> 0.166400` and WER `0.384468 -> 0.386682`; those rows were not an
-interleaved comparison. The promoted CPU-metadata change has a fresher direct
-control: main was CER/WER `0.163900/0.385612`, while the candidate was
-`0.163614/0.384638`. Both are slightly better, and the low-level row pack is
-bit-exact, so there is no observed quality regression from this new path.
+The refreshed final full rows report CER/WER `0.160/0.383` sequentially and
+`0.160/0.382` in batched mode. They do not show a material quality regression
+relative to the fused static-FP8 control (`0.163/0.385` sequential and
+`0.166/0.387` batched). The graph admission checks also compare the capture
+result bitwise with eager execution before enabling replay.
 
 ## Profile with Nsight Systems
 
@@ -935,17 +941,16 @@ optimized paths:
   explains the specialized Triton kernel, vLLM integration, exact RMS
   reduction order, prefill dispatch, correctness checks, profiling evidence,
   and current benchmark results.
+- [Qwen3-ASR audio lengths and CUDA-graph fast-path coverage](docs/qwen3-asr-audio-length-and-graph-fast-path.md)
+  is the authoritative implementation guide for CPU metadata construction,
+  exact Triton row packing, prefix/suffix boundaries, natural-shape admission,
+  CUDA graph cache behavior, fallback handling, and raw-audio length mapping.
+- [Final natural-only audio CUDA-graph benchmark](docs/audio-natural-only-cudagraph-benchmark.md)
+  records the current `analyse_results.py` tables, warm-up policy, comparison
+  to the fused decoder control, quality results, and interpretation.
 - [CPU audio metadata and exact valid-row packing](ideas/audio_cpu_metadata_pack.md)
-  explains the synchronization audit, strict installed-source/runtime guards,
-  exact Triton row-copy helper, repeated B16 service A/B, full CER/WER gate,
-  and the TTFT tradeoff of the current latency-optimized path.
-- [Batched kernel optimization round 4](docs/batched-kernel-optimization-round4.md)
-  records the shared-prefix-pool plus two-bucket audio-suffix CUDA graph
-  candidate, clean adjacent batched A/B numbers, quality score, commands, and
-  branches that still need uncontested GPU service validation.
-- [Batched kernel optimization round 3](ideas/batched_kernel_optimization_round_3.md)
-  records the fresh baseline, true-B16 Nsight breakdown, accepted and rejected
-  branches, benchmark discipline, and remaining kernel opportunities.
+  preserves the original synchronization audit and round-three validation that
+  motivated the metadata layer beneath the final graph caches.
 - [Nsight Systems FP8 optimization guide](docs/nsys-fp8-optimization-guide.md)
   covers capture commands, report interpretation, CUDA-graph timing, exact
   node-level differences, screenshots, and row-by-row decoder pseudocode for

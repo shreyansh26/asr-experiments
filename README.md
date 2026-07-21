@@ -948,6 +948,9 @@ optimized paths:
 - [Final natural-only audio CUDA-graph benchmark](docs/audio-natural-only-cudagraph-benchmark.md)
   records the current `analyse_results.py` tables, warm-up policy, comparison
   to the fused decoder control, quality results, and interpretation.
+- [Benchmarking and CUDA helper guide](docs/benchmarking-guide.md) documents the
+  end-to-end benchmark matrix, result aggregation, all five synthetic CUDA
+  helpers, success markers, requirements, and the two-terminal Nsight workflow.
 - [CPU audio metadata and exact valid-row packing](ideas/audio_cpu_metadata_pack.md)
   preserves the original synchronization audit and round-three validation that
   motivated the metadata layer beneath the final graph caches.

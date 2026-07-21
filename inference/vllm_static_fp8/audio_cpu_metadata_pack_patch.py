@@ -196,7 +196,13 @@ def _build_cpu_metadata(
         device="cpu",
     )
     tail_chunk_index = F.pad(chunk_num, (1, 0), value=-1).cumsum(0)[1:]
-    chunk_lengths[tail_chunk_index] = feature_lens % raw_chunk_size
+    # The public guard accepts both int32 and int64 CPU length tensors, while
+    # chunk_lengths is intentionally long for split()/indexing consumers.
+    # Normalize the tail values before indexed assignment so int32 inputs use
+    # the same supported fast path instead of failing on a dtype mismatch.
+    chunk_lengths[tail_chunk_index] = (
+        feature_lens % raw_chunk_size
+    ).to(chunk_lengths.dtype)
     chunk_lengths[chunk_lengths == 0] = raw_chunk_size
 
     pack_lengths = chunk_lengths

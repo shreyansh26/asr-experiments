@@ -60,6 +60,25 @@ class AudioCpuMetadataPackPatchTest(unittest.TestCase):
         )
         self.assertEqual(cu_seqlens, [0, 13, 27, 60])
 
+    def test_cpu_metadata_accepts_int32_lengths(self) -> None:
+        feature_lens = torch.tensor([100, 101, 250], dtype=torch.int32)
+        aftercnn_lens = _expected_audio_output_lengths(feature_lens)
+
+        chunk_lengths, pack_metadata, cu_seqlens = _build_cpu_metadata(
+            feature_lens,
+            aftercnn_lens,
+            n_window=50,
+            n_window_infer=800,
+        )
+
+        self.assertEqual(chunk_lengths.dtype, torch.int64)
+        self.assertEqual(chunk_lengths.tolist(), [100, 100, 1, 100, 100, 50])
+        self.assertEqual(
+            pack_metadata.tolist(),
+            [13, 13, 1, 13, 13, 7, 0, 13, 26, 27, 40, 53],
+        )
+        self.assertEqual(cu_seqlens, [0, 13, 27, 60])
+
     def test_cpu_metadata_handles_short_window_geometry(self) -> None:
         feature_lens = torch.tensor([1, 50, 99], dtype=torch.int64)
         aftercnn_lens = _expected_audio_output_lengths(feature_lens)

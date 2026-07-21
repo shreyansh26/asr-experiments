@@ -343,9 +343,11 @@ stream concurrency:
 | 269 | 6683.440 us | 2137.824 us | 6722.245 us | 172.673 us |
 | 271 | 6722.048 us | 2133.536 us | 6700.560 us | 167.908 us |
 
-These are focused helper measurements, not end-to-end service results. The
-expanded admission set still requires an adjacent service benchmark before it
-can replace the selected `opt5` result.
+These focused helper measurements were followed by a clean end-to-end service
+run from commit `98f6992` on GPU1. The 500-file, 50-second batched workload
+completed with zero failures/timeouts at 29.572 files/s, 0.526 s mean latency,
+and 0.199 s mean TTFT. The server log also showed the expanded 21-chunk family
+entering probation and replay through the existing 273-row suffix bucket.
 
 ## Long-file splitting and arbitrary final tails
 

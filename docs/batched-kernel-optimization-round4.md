@@ -16,6 +16,11 @@ This branch combines:
 
 No PyTorch, vLLM, Triton, CUDA, or model version was changed.
 
+For the complete sample-to-feature-to-CNN length derivation, the origin of the
+104-row attention window, exact graph-eligible duration ranges, and long-file
+tail behavior, see
+[Qwen3-ASR audio lengths and CUDA-graph fast-path coverage](qwen3-asr-audio-length-and-graph-fast-path.md).
+
 ## Clean service measurements
 
 Run all service tests on one explicitly free GPU. The benchmark runner resets

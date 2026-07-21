@@ -2,7 +2,15 @@
 
 Audience: developers working on Qwen3-ASR/vLLM batched inference kernels.
 
-## Current decision
+> **Historical experiment record.** This note preserves the candidate-selection
+> evidence from round four, including the earlier 20--21 second tail graph and
+> two-bucket suffix design. The promoted branch now uses 104 natural prefix
+> keys, 14 prefix signatures, and one 390-row suffix graph; all tail shapes are
+> eager. Current architecture and measurements are in the
+> [audio-length guide](../qwen3-asr-audio-length-and-graph-fast-path.md) and
+> [final benchmark report](../audio-natural-only-cudagraph-benchmark.md).
+
+## Decision at the end of round four
 
 Promote `opt5/audio-prefix-shared-suffix-bucketed` as the cleanest latency-first
 round-four candidate tested so far.
@@ -19,7 +27,7 @@ No PyTorch, vLLM, Triton, CUDA, or model version was changed.
 For the complete sample-to-feature-to-CNN length derivation, the origin of the
 104-row attention window, exact graph-eligible duration ranges, and long-file
 tail behavior, see
-[Qwen3-ASR audio lengths and CUDA-graph fast-path coverage](qwen3-asr-audio-length-and-graph-fast-path.md).
+[Qwen3-ASR audio lengths and CUDA-graph fast-path coverage](../qwen3-asr-audio-length-and-graph-fast-path.md).
 
 ## Clean service measurements
 

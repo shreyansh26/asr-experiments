@@ -5,10 +5,10 @@ length, how that feature length becomes the post-CNN row count used by the
 audio transformer, and which resulting shapes are admitted by the current
 audio-prefix and audio-suffix CUDA graphs.
 
-The implementation described here starts from the selected round-four
-candidate on branch `opt5/audio-prefix-shared-suffix-bucketed`. Follow-up
-branch `opt6/audio-tail-rows-263-271` experimentally expanded the compatible
-21-chunk tail row family to `M=263..273`. The promoted follow-up deliberately
+The implementation described here is the final path on branch
+`promote/audio-prefix-shared-suffix-bucketed`. Earlier branches first added a
+shared prefix pool and two suffix buckets, then experimentally expanded a
+21-chunk tail family to `M=263..273`. The promoted implementation deliberately
 removes that workload-derived tail admission and retains graphs only for the
 canonical 29--30 second chunk family. It combines:
 
@@ -16,7 +16,7 @@ canonical 29--30 second chunk family. It combines:
   write;
 - general CPU construction of audio length and packing metadata;
 - exact-admitted audio-prefix CUDA graphs with a shared graph memory pool;
-- exact-admitted audio-suffix CUDA graphs grouped into two padded row buckets.
+- exact-admitted audio-suffix CUDA graphs grouped into one padded 390-row bucket.
 
 The key distinction is:
 
@@ -44,36 +44,74 @@ Files longer than 30 seconds are split into several server-side chunks before
 this model pipeline. Graph admission happens independently for each resulting
 chunk, not once for the original file.
 
+## Final promoted execution flow
+
+The launcher enables all four audio flags before chaining into the fused
+static-FP8 server:
+
+```text
+run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh
+  -> ASR_AUDIO_CPU_MAXSEQLEN=1
+  -> ASR_AUDIO_CPU_METADATA_PACK=1
+  -> ASR_AUDIO_PREFIX_CUDAGRAPH=1
+  -> ASR_AUDIO_SUFFIX_CUDAGRAPH=1
+  -> run_vllm_fp8_static_qk_prefill.sh
+```
+
+`audio_prefix_suffix_cudagraph_patch.py` installs both graph runners through a
+single patched audio-encoder forward owned by
+`audio_cpu_metadata_pack_patch.py`. For each encoder invocation:
+
+```text
+CPU feature_lens and aftercnn_lens
+  -> validate installed model, backend, tensors, and exact length formula
+  -> derive chunk_lengths, pack lengths/offsets, and cu_seqlens on CPU
+  -> split and pad GPU input features using CPU-known chunk lengths
+  -> prefix runner
+       admitted hot natural key -> prefix CUDA graph
+       otherwise                -> eager CNN/projection + Triton row pack
+  -> async copy cu_seqlens to GPU; obtain CPU-cached max_seqlen
+  -> suffix runner
+       admitted hot natural key -> padded 390-row suffix CUDA graph
+       otherwise                -> eager 24-layer transformer/projection
+```
+
+The CUDA graphs are therefore accelerators inside the general metadata path,
+not an alternative input pipeline. A request can miss both graph caches and
+still receive the CPU-metadata and Triton-pack optimization.
+
 ## Decoded samples to feature length
 
 Let `N` be the number of mono samples after resampling to 16 kHz. The Whisper
 feature extractor uses a hop length of 160 samples, which is 10 ms at 16 kHz.
 
-For the single-audio server processing path, the valid feature length is:
+The installed vLLM multimodal processor first right-pads each positive decoded
+chunk to a multiple of the 160-sample hop. It then publishes the padded sample
+count divided by 160 as `audio_feature_lengths`. Therefore the runtime feature
+length is:
 
 ```text
-F = floor(N / 160)
+F = ceil(N / 160) = floor((N + 159) / 160)
 ```
 
 Equivalently, for decoded duration `T = N / 16000` seconds:
 
 ```text
-F = floor(100 * T)
+F = ceil(100 * T)
 ```
 
-The exact runtime authority is the sum of the rescaled feature attention mask.
-The feature extractor subsamples the sample-domain mask with `hop_length=160`
-and trims the extra STFT frame. Thus an exact feature length `F` corresponds to
-the following 16 kHz sample interval:
+The exact runtime authority is the patched `audio_feature_lengths` and its
+matching feature attention mask. Thus an exact positive feature length `F`
+corresponds to the following 16 kHz sample interval:
 
 ```text
-160 * F <= N < 160 * (F + 1)
+160 * (F - 1) < N <= 160 * F
 ```
 
-or the following half-open duration interval:
+or the following half-open/half-closed duration interval:
 
 ```text
-F / 100 <= T < (F + 1) / 100 seconds
+(F - 1) / 100 < T <= F / 100 seconds
 ```
 
 Original sample rate, channel count, and container format do not directly
@@ -82,7 +120,14 @@ final 16 kHz sample count. For compressed formats or resampled inputs, inspect
 the decoded sample count or runtime feature attention mask when a boundary
 must be classified exactly.
 
-The installed feature extractor logic is in:
+The installed pre-padding and length override are in:
+
+```text
+.venv/lib/python3.12/site-packages/vllm/model_executor/models/
+  qwen3_omni_moe_thinker.py
+```
+
+The underlying feature extractor is in:
 
 ```text
 .venv/lib/python3.12/site-packages/transformers/models/whisper/
@@ -212,8 +257,27 @@ lengths accepted by the guarded installed model implementation. This part is
 not restricted to 20-second, 29-second, or 30-second audio.
 
 The Triton valid-row pack copies only the valid CNN rows into their calculated
-output offsets. Unsupported model versions or inconsistent metadata fail
-closed to the accepted implementation.
+output offsets. Its CPU metadata tensor contains two halves: the valid row
+count for each padded CNN chunk and that chunk's destination offset. One Triton
+program is launched per padded row and masks invalid rows, eliminating the
+prior boolean-index construction and GPU-to-host list materialization.
+
+The patch also retains `audio_feature_lengths` on the CPU through vLLM's
+multimodal field configuration. It validates both `feature_lens` and
+`aftercnn_lens`, constructs `chunk_lengths`, `pack_metadata`, and
+`cu_seqlens`, and transfers only the small metadata needed by GPU kernels.
+`audio_cpu_maxseqlen_patch.py` returns the already-known CPU maximum attention
+length, avoiding the same CUDA scalar readback in each of the 24 layers.
+The cached value `104` is a safe upper bound; a very short request may have a
+smaller actual attention partition.
+
+Installation fails closed unless the installed distribution is vLLM
+`0.24.0+cu129` and its `direct_url.json` wheel URL matches the wheel URL and
+SHA-256 locked in `uv.lock`. A provenance mismatch prevents installation of
+the metadata wrapper. After installation, runtime model/backend/tensor/length
+guards protect the narrower forward seam; a runtime miss moves the CPU length
+tensors back to the feature device and delegates that invocation to the
+original vLLM forward.
 
 Implementation:
 
@@ -273,30 +337,27 @@ Natural graph admission covers the following continuous feature-length range:
 2897 <= F <= 3000
 ```
 
-This is approximately 28.97 through 30.00 seconds for chunks supplied by the
+This is greater than 28.96 through 30.00 seconds for chunks supplied by the
 server API, whose maximum chunk duration is 30 seconds.
 
 | Post-CNN rows `M` | Exact feature lengths `F` | Approximate duration |
 |---:|---:|---:|
-| 377 | 2897..2900 | 28.97..<29.01 s |
-| 378 | 2901..2908 | 29.01..<29.09 s |
-| 379 | 2909..2916 | 29.09..<29.17 s |
-| 380 | 2917..2924 | 29.17..<29.25 s |
-| 381 | 2925..2932 | 29.25..<29.33 s |
-| 382 | 2933..2940 | 29.33..<29.41 s |
-| 383 | 2941..2948 | 29.41..<29.49 s |
-| 384 | 2949..2956 | 29.49..<29.57 s |
-| 385 | 2957..2964 | 29.57..<29.65 s |
-| 386 | 2965..2972 | 29.65..<29.73 s |
-| 387 | 2973..2980 | 29.73..<29.81 s |
-| 388 | 2981..2988 | 29.81..<29.89 s |
-| 389 | 2989..2996 | 29.89..<29.97 s |
-| 390 | 2997..3000 | 29.97..30.00 s under the API cap |
+| 377 | 2897..2900 | `(28.96, 29.00]` s |
+| 378 | 2901..2908 | `(29.00, 29.08]` s |
+| 379 | 2909..2916 | `(29.08, 29.16]` s |
+| 380 | 2917..2924 | `(29.16, 29.24]` s |
+| 381 | 2925..2932 | `(29.24, 29.32]` s |
+| 382 | 2933..2940 | `(29.32, 29.40]` s |
+| 383 | 2941..2948 | `(29.40, 29.48]` s |
+| 384 | 2949..2956 | `(29.48, 29.56]` s |
+| 385 | 2957..2964 | `(29.56, 29.64]` s |
+| 386 | 2965..2972 | `(29.64, 29.72]` s |
+| 387 | 2973..2980 | `(29.72, 29.80]` s |
+| 388 | 2981..2988 | `(29.80, 29.88]` s |
+| 389 | 2989..2996 | `(29.88, 29.96]` s |
+| 390 | 2997..3000 | `(29.96, 30.00]` s |
 
-The mathematical interval for `F=3000` extends to just below 30.01 seconds,
-but an original API input longer than 30 seconds is chunked before feature
-extraction. The effective server-created natural range therefore ends at
-30.00 seconds.
+The full natural interval is `(28.96, 30.00]` seconds after decoding to 16 kHz.
 
 ## Historical tail experiment and current exclusion
 
@@ -306,20 +367,20 @@ single-audio feature range continuous across these rows:
 
 | Post-CNN rows `M` | Exact feature lengths `F` | Approximate duration |
 |---:|---:|---:|
-| 263 | 2017..2024 | 20.17..<20.25 s |
-| 264 | 2025..2032 | 20.25..<20.33 s |
-| 265 | 2033..2040 | 20.33..<20.41 s |
-| 266 | 2041..2048 | 20.41..<20.49 s |
-| 267 | 2049..2056 | 20.49..<20.57 s |
-| 268 | 2057..2064 | 20.57..<20.65 s |
-| 269 | 2065..2072 | 20.65..<20.73 s |
-| 270 | 2073..2080 | 20.73..<20.81 s |
-| 271 | 2081..2088 | 20.81..<20.89 s |
-| 272 | 2089..2096 | 20.89..<20.97 s |
-| 273 | 2097..2100 | 20.97..<21.01 s |
+| 263 | 2017..2024 | `(20.16, 20.24]` s |
+| 264 | 2025..2032 | `(20.24, 20.32]` s |
+| 265 | 2033..2040 | `(20.32, 20.40]` s |
+| 266 | 2041..2048 | `(20.40, 20.48]` s |
+| 267 | 2049..2056 | `(20.48, 20.56]` s |
+| 268 | 2057..2064 | `(20.56, 20.64]` s |
+| 269 | 2065..2072 | `(20.64, 20.72]` s |
+| 270 | 2073..2080 | `(20.72, 20.80]` s |
+| 271 | 2081..2088 | `(20.80, 20.88]` s |
+| 272 | 2089..2096 | `(20.88, 20.96]` s |
+| 273 | 2097..2100 | `(20.96, 21.00]` s |
 
-That experimental family covered `F=2017..2100`, approximately
-`[20.17, 21.01)` seconds, without changing the 273-row suffix bucket. The
+That experimental family covered `F=2017..2100`, or `(20.16, 21.00]` seconds,
+without changing the 273-row suffix bucket. The
 promoted natural-only implementation sets the tail admission sets to empty,
 so every row in this table now takes the general eager path. The mapping is
 retained here to explain the experiment and the fixed-50 benchmark stress case.
@@ -419,14 +480,13 @@ low-energy split depends on the waveform.
 ## Why the varying 550-file workload still improves
 
 The full 550-file natural workload is not restricted to one audio duration.
-The original selected same-server steady run improved aggregate throughput and
-latency substantially:
+The refreshed 16-worker row selected by `analyse_results.py` is:
 
-| Path | Throughput | Average latency | Average TTFT |
-|---|---:|---:|---:|
-| Accepted adjacent mean | 4.803 files/s | 3.269 s | 0.533 s |
-| Selected winner, steady | 5.809 files/s | 2.696 s | 0.629 s |
-| Change | +20.95% | -17.53% | +18.01% |
+| Path | Throughput | Latency p50/p95/p99 | TTFT p50/p95/p99 | CER/WER |
+|---|---:|---:|---:|---:|
+| FP8 static + Q/K fusion | 4.604 files/s | 3.137 / 6.276 / 8.382 s | 0.385 / 1.069 / 1.761 s | 0.166 / 0.387 |
+| Final natural-only graphs | 5.722 files/s | 2.521 / 4.830 / 6.653 s | 0.543 / 1.328 / 1.759 s | 0.160 / 0.382 |
+| Change | +24.28% | -19.64% / -23.04% / -20.63% | +41.04% / +24.23% / -0.11% | snapshot comparison |
 
 This result demonstrates useful partial coverage, not uniform acceleration of
 every file:
@@ -438,24 +498,17 @@ every file:
   prefix/suffix execution;
 - graph-eligible invocations occur often enough to improve aggregate batched
   throughput and mean latency;
-- TTFT regressed in this comparison and remains the main measured tradeoff.
+- TTFT p50/p95 regress in this comparison and remain the main measured
+  tradeoff; TTFT p99 is effectively unchanged.
 
 The workload result therefore supports the description **shape-specialized
 but workload-general**. The implementation is not tied to the 550 source files
 or their contents, but graph replay is restricted to the admitted runtime
 shapes.
 
-Quality measurements and the exact service methodology are recorded in
-[the round-four report](batched-kernel-optimization-round4.md).
-
-The later natural-only run reached `5.717 files/s`, `2.738 s` mean latency,
-and `0.613 s` mean TTFT. Against the adjacent tail-graph run on another H100 of
-the same SKU, that is `+1.08%` throughput, `-1.23%` mean latency, and `-9.99%`
-mean TTFT. The matched fixed-50 stress test moved in the opposite direction:
-removing tail graphs reduced throughput by `5.98%` and increased mean latency
-by `15.33%`. See
-[the natural-only benchmark note](audio-natural-only-cudagraph-benchmark.md)
-for full percentiles and quality results.
+Quality measurements, all four analyzer tables, warm-up boundaries, and the
+historical-versus-final distinction are recorded in
+[the final natural-only benchmark note](audio-natural-only-cudagraph-benchmark.md).
 
 ## Cold admission versus steady replay
 
@@ -475,15 +528,17 @@ graph path, while fresh-service measurements include admission overhead.
 
 ## Multi-audio and batch-layout qualification
 
-HTTP concurrency does not weaken graph validation. A graph key includes the
-full length and cumulative-attention metadata, not only the summed row count.
-An unseen single audio with an admitted length and canonical metadata can use
-the graph regardless of its content.
+HTTP concurrency does not weaken graph validation. An unseen single audio with
+an admitted length and canonical metadata can use both graphs regardless of
+its content.
 
-A different packed multi-audio partition does not qualify merely because its
-total post-CNN rows equal an admitted `M`. If `feature_lens`, `aftercnn_lens`,
-raw chunking, pack offsets, or `cu_seqlens` differ, the exact guard rejects the
-graph replay and retains eager correctness.
+Prefix admission explicitly requires one audio and checks `feature_lens`,
+`aftercnn_lens`, raw chunking, pack offsets, and `cu_seqlens`; a multi-audio
+prefix therefore stays eager even when its total rows equal an admitted `M`.
+The suffix sees only the boundary tensor and attention metadata. It may qualify
+if those values exactly equal `[M,1024]` plus canonical
+`(0,104,208,312,M)`, but equal total rows with a different partition remain a
+miss. In either case, a miss retains eager correctness.
 
 ## Small calculator
 
@@ -492,7 +547,7 @@ The following reproduces the single-chunk length mapping after decoding to
 
 ```python
 def qwen3_asr_lengths(samples_16khz: int) -> tuple[int, int]:
-    feature_frames = samples_16khz // 160
+    feature_frames = (samples_16khz + 159) // 160
     full_chunks, tail_frames = divmod(feature_frames, 100)
     post_cnn_rows = 13 * full_chunks + (tail_frames + 7) // 8
     return feature_frames, post_cnn_rows
@@ -506,7 +561,8 @@ offset, the per-audio length tuples, and the cumulative attention boundaries.
 
 - Raw audio content does not select the fast path; decoded shape and metadata
   do.
-- Feature length advances once per 10 ms after resampling to 16 kHz.
+- The processor right-pads to the next 10 ms hop, so feature length is the
+  ceiling of decoded 16 kHz samples divided by 160.
 - The three CNNs produce 13 rows per full one-second feature chunk.
 - Eight such chunks form the configured 104-row local-attention window.
 - Non-final chunks created by the current long-file splitter naturally land in

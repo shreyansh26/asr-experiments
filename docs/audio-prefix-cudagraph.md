@@ -1,11 +1,19 @@
 # Natural-hotset audio prefix CUDA graphs with a shared pool
 
+> **Historical development note.** The shared-pool design described here was
+> validated and retained, but the later `M=263..273` tail expansion was not
+> promoted. The final cache has 104 exact natural probation keys and 14 graph
+> signatures for `F=2897..3000`, with one shared stream/pool and no tail keys.
+> See the [final implementation guide](qwen3-asr-audio-length-and-graph-fast-path.md)
+> and [benchmark report](audio-natural-only-cudagraph-benchmark.md).
+
 Branch: `opt4/audio-prefix-cudagraph-natural-shared`
 
 Base: natural-hotset prefix commit `52e81c3`.
 
-No PyTorch, vLLM, Triton, or other dependency version changed. This branch has
-not run a GPU helper or vLLM service benchmark.
+No PyTorch, vLLM, Triton, or other dependency version changed. The opening
+branch snapshot had not yet run a GPU helper or service benchmark; subsequent
+sections and the final report record the completed validation.
 
 ## Workload target
 

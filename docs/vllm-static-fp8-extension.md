@@ -59,6 +59,30 @@ flowchart TD
 The key idea is that normal Python startup performs the registration before
 vLLM parses and resolves the `--quantization` value.
 
+## Final composed Qwen3-ASR launcher
+
+The static-FP8 extension is the base of the current optimized server:
+
+```bash
+PORT=8091 \
+  bash inference/run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh
+```
+
+The launcher chain enables the fused Q/K RMSNorm + MRoPE + KV-cache patch,
+CPU audio max-seqlen, CPU metadata/Triton row packing, and the natural-only
+audio prefix/suffix CUDA graph caches before delegating to this document's
+`fp8_static_json` launcher. The graph runners are installed together through
+one metadata-aware audio forward; a graph miss executes that optimized eager
+path, while an unsupported metadata/runtime contract returns to the original
+vLLM forward.
+
+The audio metadata patch is additionally pinned to vLLM `0.24.0+cu129` and the
+expected wheel URL/hash in `uv.lock`. See
+[Qwen3-ASR audio lengths and CUDA-graph fast-path coverage](qwen3-asr-audio-length-and-graph-fast-path.md)
+for the composed runtime flow and
+[the final benchmark report](audio-natural-only-cudagraph-benchmark.md) for
+current results.
+
 ## How the out-of-tree hook works
 
 ### 1. The launcher exports the inputs

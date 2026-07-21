@@ -1,197 +1,212 @@
-# Natural-only audio CUDA graphs
+# Final natural-only audio CUDA graphs
 
-Branch: `opt7/audio-natural-only-cudagraph`
-
-Promoted into: `promote/audio-prefix-shared-suffix-bucketed`
+Branch: `promote/audio-prefix-shared-suffix-bucketed`
 
 Date: 2026-07-21
 
 ## Decision
 
-The promoted configuration CUDA-graph captures only canonical 29--30 second
-server chunks. It does **not** capture the workload-derived 20--21 second tail
-family. Those tails, and every other unsupported final-chunk duration, use the
-existing eager implementation.
+The promoted server composes four optimizations:
 
-This is a generality tradeoff, not a universal speedup. On the varying
-550-file workload, removing tail graphs was essentially neutral within the
-noise of runs on two physical H100s of the same SKU. On the intentionally
-tail-heavy fixed-50 workload, it was measurably slower, especially in batched
-mode. The natural-only configuration is promoted to avoid encoding a narrow
-50-second benchmark artifact in the graph inventory, with that fixed-50 cost
-recorded explicitly.
+1. calibrated static FP8 decoder execution;
+2. fused Q/K RMSNorm, MRoPE, and paged KV-cache writes;
+3. CPU-built audio length/attention metadata plus a Triton valid-row pack;
+4. exact-admitted CUDA graph caches for the audio-encoder prefix and suffix.
 
-## Implementation
+The CUDA graph policy is deliberately **natural-only**. It captures canonical
+29--30 second chunks created by the server splitter and does not capture the
+approximately 20--21 second tails induced by the fixed-50 benchmark. Arbitrary
+durations remain supported by the general CPU-metadata/eager path.
 
-The general CPU metadata and Triton valid-row pack remain unchanged and still
-support arbitrary valid audio lengths. Only CUDA-graph admission changes:
+Launch the final stack with:
 
-- `audio_prefix_cudagraph_patch.py` sets `_TAIL_PACKED_ROWS` to an empty set,
-  admits only the 104 exact natural feature keys `F=2897..3000`, and limits
-  graph signatures to the 14 natural post-CNN rows `M=377..390`.
-- `audio_suffix_cudagraph_patch.py` sets `_TAIL_ROWS` to an empty set, removes
-  the 273-row tail bucket, and retains one 390-row graph bucket for the 14
-  natural rows.
-- The helper benchmarks use only natural representatives.
-- Prefix and suffix tests explicitly assert that former tail rows 263, 266,
-  269, and 271 are rejected and stay eager.
-
-The accepted natural prefix key still verifies the complete tensor shape,
-stride, raw chunk lengths, pack lengths and offsets, feature and post-CNN
-length tuples, and cumulative attention boundaries. This change does not
-weaken graph guards.
-
-## Coverage after the change
-
-```text
-F=2897..3000, M=377..390
-  prefix graph: yes, after per-key probation
-  suffix graph: yes, through the 390-row bucket
-
-all other F and M, including M=263..273
-  prefix graph: no
-  suffix graph: no
-  execution: accepted eager fallback
+```bash
+PORT=8091 \
+  bash inference/run_vllm_fp8_static_qk_prefill_audio_prefix_suffix_cudagraph.sh
 ```
 
-For a typical 50-second file split into approximately `29.x + 20.x` seconds,
-the first chunk can use both graphs and the final chunk is eager. For a general
-long file, each 29--30 second non-final chunk can use the graphs independently;
-the arbitrary final chunk remains eager unless it independently falls in the
-natural range.
+For the exact audio-length mapping and implementation flow, see
+[Qwen3-ASR audio lengths and CUDA-graph fast-path coverage](qwen3-asr-audio-length-and-graph-fast-path.md).
 
-## Validation gates
+## What is cached
 
-Focused CPU tests:
+“Prefix” and “suffix” are computation regions, not time segments of the audio:
+
+```text
+input features
+  -> chunk/pad -> three CNNs -> conv_out -> position add -> valid-row pack
+     <----------------------- prefix graph ------------------------------>
+  -> 24 audio-transformer layers -> ln_post -> proj1 -> act -> proj2
+     <----------------------- suffix graph ------------------------------>
+```
+
+The tensor at the boundary is `[M, 1024]`, so the same admitted post-CNN row
+range `M=377..390` appears in both caches.
+
+- The prefix accepts 104 exact feature lengths `F=2897..3000`. They collapse
+  to 14 captured signatures, one for each output row count `M=377..390`.
+- All prefix signatures use one CUDA graph memory pool. Capture/replay is
+  serialized because pool-backed allocations may alias across signatures.
+- The suffix accepts the same 14 exact row counts but pads them into one fixed
+  390-row graph. The returned tensor is sliced back to the real `M` rows.
+- Exact input metadata is validated before either cache can select a graph;
+  equal total rows alone are insufficient.
+
+Each exact runtime key has an eight-observation probation period:
+
+```text
+observations 1..7 -> eager execution
+observation 8     -> capture or signature alias, then bitwise eager validation
+observation 9+    -> copy into stable inputs, replay, clone/slice output
+```
+
+Unsupported keys, cache limits, capture failures, validation mismatches,
+training/gradient mode, and incompatible tensor layouts fail closed to eager
+execution. The caches do not change model outputs approximately: a candidate
+must match eager output bitwise before hot replay is admitted.
+
+## What remains general
+
+The CPU metadata layer is used for every supported audio length, not only graph
+shapes. It keeps feature lengths on the CPU, derives raw chunk lengths,
+post-CNN pack lengths and offsets, and local-attention cumulative boundaries,
+then transfers only the small metadata tensors asynchronously. One Triton
+kernel packs valid CNN rows directly into `[M, 1024]`. A companion max-seqlen
+patch keeps the known attention maximum on the CPU instead of repeating a GPU
+scalar readback in each of the 24 transformer layers.
+
+Therefore an audio request has three possible outcomes:
+
+| Runtime shape/layout | Metadata and row pack | Prefix/suffix execution |
+|---|---|---|
+| Canonical `F=2897..3000`, admitted and hot | CPU + Triton | CUDA graph replay |
+| CPU-metadata-compatible but graph-ineligible length/metadata | CPU + Triton | eager |
+| Unsupported installed model/runtime contract | original vLLM path | original vLLM path |
+
+## Benchmark provenance
+
+The tables below are the output selected from the current local CSV files by:
+
+```bash
+uv run inference/analyse_results.py --mode batched
+uv run inference/analyse_results.py --mode sequential
+```
+
+The fixed-50 final rows used 100 warm-up files. Most older fixed-50 controls
+printed beside them used 20, so their percentage deltas are useful snapshot
+comparisons rather than a warm-up-matched causal A/B. The full 550-file rows
+used 20 warm-up files and are the only rows scored for CER/WER, but were also
+collected on different dates/server lifetimes. All final service runs completed
+without a failed or timed-out measured request. Latency and TTFT are seconds;
+throughput is completed files per second.
+
+## Batched results
+
+### Full workload, 550 files, 16 workers
+
+| Precision | Lat p50 | Lat p95 | Lat p99 | TTFT p50 | TTFT p95 | TTFT p99 | Throughput | CER | WER |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| BF16 | 3.520 | 7.136 | 9.130 | 0.351 | 0.946 | 1.946 | 4.138 | 0.166 | 0.387 |
+| FP8 dynamic | 3.563 | 7.166 | 9.903 | 0.343 | 1.121 | 1.838 | 4.104 | 0.158 | 0.380 |
+| FP8 static | 3.346 | 6.675 | 9.124 | 0.426 | 1.177 | 1.984 | 4.352 | 0.162 | 0.384 |
+| FP8 static + Q/K fusion | 3.137 | 6.276 | 8.382 | 0.385 | 1.069 | 1.761 | 4.604 | 0.166 | 0.387 |
+| **Final natural-only graphs** | **2.521** | **4.830** | **6.653** | 0.543 | 1.328 | **1.759** | **5.722** | **0.160** | **0.382** |
+
+Versus the displayed fused static-FP8 decoder snapshot:
+
+| Metric | Change |
+|---|---:|
+| Throughput | **+24.28%** |
+| Latency p50 / p95 / p99 | **-19.64% / -23.04% / -20.63%** |
+| TTFT p50 / p95 / p99 | +41.04% / +24.23% / **-0.11%** |
+
+This is the primary latency-prioritized result. TTFT p50/p95 remain the main
+tradeoff under the varying 16-worker load.
+
+### Fixed 50 seconds, 100 files, 16 workers
+
+| Precision | Lat p50 | Lat p95 | Lat p99 | TTFT p50 | TTFT p95 | TTFT p99 | Throughput |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| BF16 | 0.720 | 1.338 | 2.768 | 0.138 | 0.448 | 0.456 | 18.554 |
+| FP8 dynamic | 0.735 | 1.279 | 1.481 | 0.154 | 0.432 | 0.499 | 20.731 |
+| FP8 static | 0.652 | 1.098 | 1.212 | 0.119 | 0.306 | 0.332 | 22.171 |
+| FP8 static + Q/K fusion | 0.636 | 1.226 | 1.424 | 0.122 | 0.499 | 0.614 | 22.635 |
+| **Final natural-only graphs** | **0.426** | **0.890** | **1.008** | **0.086** | **0.216** | **0.227** | **28.192** |
+
+Versus the displayed fused-control snapshot, throughput improves `24.55%`, latency percentiles
+improve `27.41--33.02%`, and TTFT percentiles improve `29.51--63.03%`.
+Only the first approximately 29--30 second chunk is graph eligible; the final
+approximately 20--21 second tail is eager. The benefit therefore does not
+depend on retaining benchmark-specific tail graphs.
+
+## Sequential results
+
+### Full workload, 550 files
+
+| Precision | Lat p50 | Lat p95 | Lat p99 | TTFT p50 | TTFT p95 | TTFT p99 | Throughput | CER | WER |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| BF16 | 1.576 | 3.261 | 4.229 | 0.203 | 0.318 | 0.377 | 0.583 | 0.168 | 0.388 |
+| FP8 dynamic | 1.473 | 2.929 | 3.732 | 0.201 | 0.309 | 0.339 | 0.640 | 0.165 | 0.385 |
+| FP8 static | 1.381 | 2.745 | 3.439 | 0.207 | 0.339 | 0.372 | 0.682 | 0.162 | 0.384 |
+| FP8 static + Q/K fusion | 1.315 | 2.599 | 3.275 | 0.220 | 0.341 | 0.373 | 0.716 | 0.163 | 0.385 |
+| **Final natural-only graphs** | **1.214** | **2.494** | **3.110** | **0.203** | **0.301** | **0.329** | **0.763** | **0.160** | **0.383** |
+
+Versus the displayed fused-control snapshot, throughput improves `6.56%`, latency percentiles
+improve `4.04--7.68%`, and TTFT percentiles improve `7.73--11.80%`.
+
+### Fixed 50 seconds, 100 files
+
+| Precision | Lat p50 | Lat p95 | Lat p99 | TTFT p50 | TTFT p95 | TTFT p99 | Throughput |
+|---|---:|---:|---:|---:|---:|---:|
+| BF16 | 0.365 | 0.564 | 1.411 | 0.063 | 0.074 | 0.092 | 2.677 |
+| FP8 dynamic | 0.286 | 0.479 | 0.634 | 0.046 | 0.060 | 0.064 | 3.409 |
+| FP8 static | 0.273 | 0.468 | 0.489 | 0.059 | 0.075 | 0.090 | 3.538 |
+| FP8 static + Q/K fusion | 0.262 | 0.451 | 0.473 | 0.063 | 0.087 | 0.091 | 3.731 |
+| **Final natural-only graphs** | **0.202** | **0.333** | **0.398** | **0.050** | **0.063** | **0.077** | **4.551** |
+
+Versus the displayed fused-control snapshot, throughput improves `21.98%`, latency percentiles
+improve `15.86--26.16%`, and TTFT percentiles improve `15.38--27.59%`.
+
+## Quality interpretation
+
+The final full rows report CER/WER of `0.160/0.383` sequentially and
+`0.160/0.382` in batched mode. The fused decoder rows are `0.163/0.385` and
+`0.166/0.387`, respectively. These snapshots show no material CER/WER
+degradation. They are service-level decoding results rather than proof of
+transcript determinism; the lower-level graph gate separately requires
+bitwise equality against eager encoder output before admitting replay.
+
+## Generality and limits
+
+The result is **shape-specialized but workload-general**:
+
+- audio content, language, speaker, file name, codec, and original sample rate
+  are not graph keys;
+- decoded/resampled feature length and the complete packing/attention layout
+  determine eligibility;
+- every 29--30 second non-final chunk generated by the current splitter can
+  qualify independently;
+- the last chunk of a long file may be anywhere in `(0, 30]` seconds and is
+  eager unless it independently lies in the natural range;
+- a multi-audio layout cannot qualify only because its total row count matches;
+- arbitrary lengths continue to benefit from CPU metadata and exact Triton
+  row packing even when neither CUDA graph is used.
+
+The 550-file gain therefore reflects useful partial coverage across varying
+audio durations, not specialization to the identities or exact lengths of the
+benchmark files.
+
+## Validation commands
 
 ```bash
 UV_PROJECT_ENVIRONMENT=/mnt/ssd1/shreyansh/home_dir/asr_experiments/.venv \
 uv run python -m unittest \
+  tests.test_audio_cpu_metadata_pack_patch \
+  tests.test_audio_cpu_maxseqlen_patch \
   tests.test_audio_prefix_cudagraph_patch \
   tests.test_audio_suffix_cudagraph_patch \
   tests.test_audio_prefix_suffix_cudagraph_patch
+
+uv run inference/analyse_results.py --mode batched
+uv run inference/analyse_results.py --mode sequential
 ```
-
-Result: 42 tests passed.
-
-GPU4, NVIDIA H100 80GB HBM3:
-
-- suffix helper passed all 14 rows `M=377..390`, bitwise equality, exact
-  268-kernel ordering, alternating-key replay, and concurrent gates;
-- chained prefix-plus-suffix helper passed for `M=384, F=2956`, including
-  bitwise equality, observation-eight admission, and concurrency;
-- combined eager host time was `6713.468 us` versus `183.188 us` for the
-  graph call; eager CUDA time was `6750.800 us` versus `2522.080 us` including
-  input copy, graph replay, and output clone.
-
-The server log admitted only natural shapes and showed no tail probation or
-capture. All service runs completed with zero failed or timed-out requests.
-
-## Canonical AGENTS.md benchmark matrix
-
-All four requested commands used the branch snapshot's default 20 warm-up
-files. The candidate server ran on GPU4 at port 8094. Runs were executed in the
-order shown on one server; later runs therefore inherited already compiled
-kernels and any admitted natural graphs. Each benchmark resets vLLM's prefix
-cache, but not the out-of-tree audio graph caches.
-
-| Mode and workload | Files | Throughput | Mean latency | Latency p50/p95/p99 | Mean TTFT | TTFT p50/p95/p99 | CER | WER |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Batched B16, fixed 50 s | 100 | 21.891 files/s | 0.678 s | 0.666 / 1.070 / 1.208 s | 0.204 s | 0.164 / 0.461 / 0.500 s | n/a | n/a |
-| Batched B16, natural | 550 | 5.717 files/s | 2.738 s | 2.550 / 4.996 / 6.759 s | 0.613 s | 0.543 / 1.231 / 1.873 s | 16.47% | 38.62% |
-| Sequential, fixed 50 s | 100 | 3.848 files/s | 0.259 s | 0.251 / 0.428 / 0.457 s | 0.052 s | 0.052 / 0.075 / 0.083 s | n/a | n/a |
-| Sequential, natural | 550 | 0.763 files/s | 1.310 s | 1.224 / 2.489 / 3.060 s | 0.195 s | 0.198 / 0.310 / 0.353 s | 16.23% | 38.42% |
-
-## Adjacent natural-workload comparison
-
-The closest prior tail-graph service rows were produced earlier the same day
-on GPU1, also an NVIDIA H100 80GB HBM3. The software stack and 20-file warm-up
-policy match, but the physical GPU and server lifetime do not. Treat small
-differences as run-to-run evidence rather than isolated kernel causality.
-
-### Batched B16, 550 natural files
-
-| Metric | Tail graphs | Natural-only | Change |
-|---|---:|---:|---:|
-| Throughput | 5.656 files/s | 5.717 files/s | +1.08% |
-| Mean latency | 2.772 s | 2.738 s | -1.23% |
-| Latency p50 | 2.604 s | 2.550 s | -2.07% |
-| Latency p95 | 4.966 s | 4.996 s | +0.60% |
-| Latency p99 | 6.603 s | 6.759 s | +2.36% |
-| Mean TTFT | 0.681 s | 0.613 s | -9.99% |
-| TTFT p50 | 0.627 s | 0.543 s | -13.40% |
-| TTFT p95 | 1.296 s | 1.231 s | -5.02% |
-| TTFT p99 | 1.843 s | 1.873 s | +1.63% |
-
-CER moved from `16.25%` to `16.47%` (`+0.22` percentage points), and WER
-moved from `38.39%` to `38.62%` (`+0.23` points). This is modest, but the
-natural-only batched run is not bitwise transcript-identical to the prior run.
-
-### Sequential, 550 natural files
-
-| Metric | Tail graphs | Natural-only | Change |
-|---|---:|---:|---:|
-| Throughput | 0.766 files/s | 0.763 files/s | -0.39% |
-| Mean latency | 1.305 s | 1.310 s | +0.38% |
-| Latency p50 | 1.212 s | 1.224 s | +0.99% |
-| Latency p95 | 2.499 s | 2.489 s | -0.40% |
-| Latency p99 | 3.051 s | 3.060 s | +0.29% |
-| Mean TTFT | 0.199 s | 0.195 s | -2.01% |
-| TTFT p50 | 0.200 s | 0.198 s | -1.00% |
-| TTFT p95 | 0.310 s | 0.310 s | 0.00% |
-| TTFT p99 | 0.341 s | 0.353 s | +3.52% |
-
-CER moved from `16.26%` to `16.23%` (`-0.04` percentage points), and WER
-moved from `38.45%` to `38.42%` (`-0.03` points).
-
-## Matched fixed-50 stress comparison
-
-The historical fixed-50 tail-graph rows used 100 warm-up files. The branch
-snapshot's wrapper no longer exposes that option, so supplementary matched
-runs used the same newer runner from the main checkout read-only against the
-natural-only server. These numbers isolate the steady, tail-heavy workload
-more fairly than comparing it with the canonical default-20 rows.
-
-### Batched B16, 100 measured files after 100 warm-ups
-
-| Metric | Tail graphs | Natural-only | Change |
-|---|---:|---:|---:|
-| Throughput | 32.134 files/s | 30.211 files/s | -5.98% |
-| Mean latency | 0.424 s | 0.489 s | +15.33% |
-| Latency p50 | 0.360 s | 0.455 s | +26.39% |
-| Latency p95 | 0.751 s | 0.834 s | +11.05% |
-| Latency p99 | 0.863 s | 0.915 s | +6.03% |
-| Mean TTFT | 0.096 s | 0.114 s | +18.75% |
-| TTFT p50 | 0.078 s | 0.089 s | +14.10% |
-| TTFT p95 | 0.202 s | 0.246 s | +21.78% |
-| TTFT p99 | 0.208 s | 0.320 s | +53.85% |
-
-### Sequential, 100 measured files after 100 warm-ups
-
-| Metric | Tail graphs | Natural-only | Change |
-|---|---:|---:|---:|
-| Throughput | 5.161 files/s | 5.028 files/s | -2.58% |
-| Mean latency | 0.193 s | 0.198 s | +2.59% |
-| Latency p50 | 0.174 s | 0.181 s | +4.02% |
-| Latency p95 | 0.312 s | 0.312 s | 0.00% |
-| Latency p99 | 0.369 s | 0.379 s | +2.71% |
-| Mean TTFT | 0.030 s | 0.031 s | +3.33% |
-| TTFT p50 | 0.030 s | 0.031 s | +3.33% |
-| TTFT p95 | 0.036 s | 0.038 s | +5.56% |
-| TTFT p99 | 0.042 s | 0.042 s | 0.00% |
-
-## Interpretation
-
-- The 20--21 second graphs were not dead code: they materially accelerated the
-  fixed-50 batched stress workload.
-- They were not required to preserve the aggregate benefit on the varying
-  natural workload. Natural-only results remained close to the adjacent
-  tail-graph run because eligible 29--30 second chunks still occur frequently.
-- Removing the tail family reduces graph inventory from 25 prefix signatures
-  and two suffix buckets to 14 prefix signatures and one suffix bucket. It also
-  eliminates probation, capture, and persistent graph-pool state for the
-  20--21 second family.
-- The promoted choice favors a simpler, less benchmark-specific graph policy.
-  If 50-second or approximately 20--21 second final chunks become a documented
-  production hot distribution, the measured fixed-50 regression is strong
-  evidence for re-enabling the guarded tail family.

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
+import threading
 from typing import Any, Callable
 
 import torch
@@ -23,6 +24,7 @@ logger = init_logger("vllm.qwen3_asr_audio_suffix_cudagraph")
 ENV_NAME = "ASR_AUDIO_SUFFIX_CUDAGRAPH"
 _PATCH_MARKER = "_asr_audio_suffix_cudagraph_patch"
 _CACHE_ATTR = "_asr_audio_suffix_cudagraph_cache"
+_CACHE_CREATION_LOCK = threading.Lock()
 _EXPECTED_LAYER_COUNT = 24
 _INPUT_WIDTH = 1024
 _OUTPUT_WIDTH = 2048
@@ -54,7 +56,11 @@ class _SuffixGraphEntry:
     static_max_seqlen: torch.Tensor
     graph: Any
     output: torch.Tensor
-    replay_stream_id: int
+    execution_stream: Any
+    replay_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        repr=False,
+    )
 
 
 def audio_suffix_cudagraph_enabled() -> bool:
@@ -149,16 +155,13 @@ class _TorchCudaGraphBackend:
     def is_current_stream_capturing(self) -> bool:
         return torch.cuda.is_current_stream_capturing()
 
-    def current_stream_id(self, device: torch.device) -> int:
-        return int(torch.cuda.current_stream(device).cuda_stream)
-
     def capture(
         self,
         function: Callable[[], torch.Tensor],
         *,
         device: torch.device,
         warmup_iterations: int,
-    ) -> tuple[Any, torch.Tensor, int]:
+    ) -> tuple[Any, torch.Tensor, Any]:
         caller_stream = torch.cuda.current_stream(device)
         capture_stream = torch.cuda.Stream(device=device)
         capture_stream.wait_stream(caller_stream)
@@ -174,10 +177,35 @@ class _TorchCudaGraphBackend:
             capture_error_mode="thread_local",
         ):
             output = function()
-        return graph, output, int(caller_stream.cuda_stream)
+        return graph, output, capture_stream
 
     def replay(self, graph: Any) -> None:
         graph.replay()
+
+    def replay_and_clone(
+        self,
+        entry: _SuffixGraphEntry,
+        hidden_states: torch.Tensor,
+    ) -> torch.Tensor:
+        caller_stream = torch.cuda.current_stream(hidden_states.device)
+        execution_stream = entry.execution_stream
+
+        # The dedicated entry stream consumes the caller's input only after
+        # its producer work. All mutable graph buffers and the output clone are
+        # then ordered FIFO on this one stream.
+        execution_stream.wait_stream(caller_stream)
+        with torch.cuda.stream(execution_stream):
+            entry.static_hidden_states.copy_(hidden_states, non_blocking=True)
+            hidden_states.record_stream(execution_stream)
+            entry.graph.replay()
+            output = entry.output.clone()
+
+        # Insert an asynchronous dependency back to the caller. record_stream
+        # keeps the clone's storage alive if the caller consumes it after this
+        # Python frame returns. Neither operation synchronizes the host.
+        caller_stream.wait_stream(execution_stream)
+        output.record_stream(caller_stream)
+        return output
 
     def equal(self, left: torch.Tensor, right: torch.Tensor) -> bool:
         return torch.equal(left, right)
@@ -202,14 +230,20 @@ class ExactShapeAudioSuffixGraphCache:
         self._rejected_keys: set[SuffixGraphKey] = set()
         self._logged_capacity = False
         self._logged_replay = False
+        # This lock protects the cache state and intentionally remains held
+        # through cold capture, so two first calls cannot capture/insert the
+        # same key concurrently. Hot GPU transactions use per-entry locks.
+        self._cache_lock = threading.Lock()
 
     @property
     def entry_count(self) -> int:
-        return len(self._entries)
+        with self._cache_lock:
+            return len(self._entries)
 
     @property
     def rejected_count(self) -> int:
-        return len(self._rejected_keys)
+        with self._cache_lock:
+            return len(self._rejected_keys)
 
     def _eager(
         self,
@@ -226,6 +260,135 @@ class ExactShapeAudioSuffixGraphCache:
             max_seqlen,
             cu_seqlens_values=cu_seqlens_values,
         )
+
+    def _replay_entry(
+        self,
+        entry: _SuffixGraphEntry,
+        hidden_states: torch.Tensor,
+    ) -> torch.Tensor:
+        # Holding the lock until the complete transaction has been enqueued is
+        # sufficient: every transaction uses entry.execution_stream, so CUDA
+        # FIFO ordering completes the prior output clone before the next input
+        # copy can overwrite graph-owned buffers. No device sync is needed.
+        with entry.replay_lock:
+            output = self._backend.replay_and_clone(entry, hidden_states)
+
+        # Avoid a second cache-wide lock on the steady-state hot path once the
+        # one-time marker has been emitted.
+        if not self._logged_replay:
+            with self._cache_lock:
+                if not self._logged_replay:
+                    logger.info(
+                        "ASR audio post-pack suffix CUDA graph replay active "
+                        "for M=%d and %d sequences",
+                        entry.key.rows,
+                        entry.key.cu_seqlens_numel - 1,
+                    )
+                    self._logged_replay = True
+        return output
+
+    def _capture_entry_locked(
+        self,
+        encoder: Any,
+        hidden_states: torch.Tensor,
+        cu_seqlens: torch.Tensor,
+        max_seqlen: torch.Tensor,
+        key: SuffixGraphKey,
+    ) -> torch.Tensor:
+        """Capture one key while ``self._cache_lock`` is held."""
+        reference_output: torch.Tensor | None = None
+        try:
+            static_hidden_states = torch.empty_like(hidden_states)
+            static_cu_seqlens = torch.empty_like(cu_seqlens)
+            static_max_seqlen = torch.empty_like(max_seqlen)
+            static_hidden_states.copy_(hidden_states, non_blocking=True)
+            static_cu_seqlens.copy_(cu_seqlens, non_blocking=True)
+            static_max_seqlen.copy_(max_seqlen, non_blocking=True)
+
+            def static_suffix() -> torch.Tensor:
+                return self._eager(
+                    encoder,
+                    static_hidden_states,
+                    static_cu_seqlens,
+                    static_max_seqlen,
+                    key.cu_seqlens_values,
+                )
+
+            graph, graph_output, execution_stream = self._backend.capture(
+                static_suffix,
+                device=hidden_states.device,
+                warmup_iterations=self._warmup_iterations,
+            )
+            if not _output_is_supported(graph_output, key):
+                raise RuntimeError(
+                    "Captured audio suffix did not return [M, 2048]"
+                )
+
+            entry = _SuffixGraphEntry(
+                key=key,
+                static_hidden_states=static_hidden_states,
+                static_cu_seqlens=static_cu_seqlens,
+                static_max_seqlen=static_max_seqlen,
+                graph=graph,
+                output=graph_output,
+                execution_stream=execution_stream,
+            )
+
+            # Gate the real captured module stack before admitting this key.
+            reference_output = self._eager(
+                encoder,
+                hidden_states,
+                cu_seqlens,
+                max_seqlen,
+                key.cu_seqlens_values,
+            )
+            if not _output_is_supported(reference_output, key):
+                raise RuntimeError("Eager audio suffix did not return [M, 2048]")
+            candidate_output = self._replay_entry_without_log(
+                entry,
+                hidden_states,
+            )
+            # This comparison synchronizes once during key admission. There is
+            # no equality check or host synchronization on admitted replays.
+            if not self._backend.equal(candidate_output, reference_output):
+                raise RuntimeError("Captured audio suffix is not bitwise exact")
+
+            self._entries[key] = entry
+            logger.info(
+                "Captured bitwise-exact audio suffix CUDA graph for M=%d and "
+                "%d sequences",
+                key.rows,
+                key.cu_seqlens_numel - 1,
+            )
+            # Preserve eager output ownership on the capture call. Replays use
+            # an independent clone from the next exact-key hit onward.
+            return reference_output
+        except Exception as error:
+            self._rejected_keys.add(key)
+            logger.warning(
+                "Audio suffix CUDA graph capture failed closed for M=%d and "
+                "%d sequences: %s",
+                key.rows,
+                key.cu_seqlens_numel - 1,
+                error,
+            )
+            if reference_output is not None:
+                return reference_output
+            return self._eager(
+                encoder,
+                hidden_states,
+                cu_seqlens,
+                max_seqlen,
+                key.cu_seqlens_values,
+            )
+
+    def _replay_entry_without_log(
+        self,
+        entry: _SuffixGraphEntry,
+        hidden_states: torch.Tensor,
+    ) -> torch.Tensor:
+        with entry.replay_lock:
+            return self._backend.replay_and_clone(entry, hidden_states)
 
     def run(
         self,
@@ -263,43 +426,11 @@ class ExactShapeAudioSuffixGraphCache:
                 tuple(cu_seqlens_values),
             )
 
-        if key in self._rejected_keys:
-            return self._eager(
-                encoder,
-                hidden_states,
-                cu_seqlens,
-                max_seqlen,
-                key.cu_seqlens_values,
-            )
-
-        caller_stream_id = self._backend.current_stream_id(hidden_states.device)
-        entry = self._entries.get(key)
-        if entry is not None:
-            if entry.replay_stream_id != caller_stream_id:
-                return self._eager(
-                    encoder,
-                    hidden_states,
-                    cu_seqlens,
-                    max_seqlen,
-                    key.cu_seqlens_values,
-                )
-            entry.static_hidden_states.copy_(hidden_states, non_blocking=True)
-            self._backend.replay(entry.graph)
-            if not self._logged_replay:
-                logger.info(
-                    "ASR audio post-pack suffix CUDA graph replay active "
-                    "for M=%d and %d sequences",
-                    key.rows,
-                    key.cu_seqlens_numel - 1,
-                )
-                self._logged_replay = True
-            # The graph-owned output is overwritten by the next exact-key
-            # replay. Return independent storage so downstream encoder-cache
-            # views cannot observe a later request's result.
-            return entry.output.clone()
-
-        if len(self._entries) >= self._max_entries:
-            if not self._logged_capacity:
+        with self._cache_lock:
+            key_rejected = key in self._rejected_keys
+            entry = self._entries.get(key)
+            cache_full = entry is None and len(self._entries) >= self._max_entries
+            if cache_full and not self._logged_capacity:
                 logger.warning(
                     "Audio suffix CUDA graph cache is full at %d exact keys; "
                     "using eager suffix for M=%d",
@@ -307,90 +438,16 @@ class ExactShapeAudioSuffixGraphCache:
                     key.rows,
                 )
                 self._logged_capacity = True
-            return self._eager(
-                encoder,
-                hidden_states,
-                cu_seqlens,
-                max_seqlen,
-                key.cu_seqlens_values,
-            )
-
-        reference_output: torch.Tensor | None = None
-        try:
-            static_hidden_states = torch.empty_like(hidden_states)
-            static_cu_seqlens = torch.empty_like(cu_seqlens)
-            static_max_seqlen = torch.empty_like(max_seqlen)
-            static_hidden_states.copy_(hidden_states, non_blocking=True)
-            static_cu_seqlens.copy_(cu_seqlens, non_blocking=True)
-            static_max_seqlen.copy_(max_seqlen, non_blocking=True)
-
-            def static_suffix() -> torch.Tensor:
-                return self._eager(
+            if not key_rejected and entry is None and not cache_full:
+                return self._capture_entry_locked(
                     encoder,
-                    static_hidden_states,
-                    static_cu_seqlens,
-                    static_max_seqlen,
-                    key.cu_seqlens_values,
+                    hidden_states,
+                    cu_seqlens,
+                    max_seqlen,
+                    key,
                 )
 
-            graph, graph_output, replay_stream_id = self._backend.capture(
-                static_suffix,
-                device=hidden_states.device,
-                warmup_iterations=self._warmup_iterations,
-            )
-            if replay_stream_id != caller_stream_id:
-                raise RuntimeError("CUDA graph capture changed the caller stream")
-            if not _output_is_supported(graph_output, key):
-                raise RuntimeError(
-                    "Captured audio suffix did not return [M, 2048]"
-                )
-
-            # Gate the real captured module stack before admitting this key.
-            reference_output = self._eager(
-                encoder,
-                hidden_states,
-                cu_seqlens,
-                max_seqlen,
-                key.cu_seqlens_values,
-            )
-            if not _output_is_supported(reference_output, key):
-                raise RuntimeError("Eager audio suffix did not return [M, 2048]")
-            static_hidden_states.copy_(hidden_states, non_blocking=True)
-            self._backend.replay(graph)
-            # This comparison synchronizes once during key admission. There is
-            # no equality check or host synchronization on admitted replays.
-            if not self._backend.equal(graph_output, reference_output):
-                raise RuntimeError("Captured audio suffix is not bitwise exact")
-
-            self._entries[key] = _SuffixGraphEntry(
-                key=key,
-                static_hidden_states=static_hidden_states,
-                static_cu_seqlens=static_cu_seqlens,
-                static_max_seqlen=static_max_seqlen,
-                graph=graph,
-                output=graph_output,
-                replay_stream_id=replay_stream_id,
-            )
-            logger.info(
-                "Captured bitwise-exact audio suffix CUDA graph for M=%d and "
-                "%d sequences",
-                key.rows,
-                key.cu_seqlens_numel - 1,
-            )
-            # Preserve eager output ownership on the capture call. Replays use
-            # the stable graph-owned output from the next exact-key hit onward.
-            return reference_output
-        except Exception as error:
-            self._rejected_keys.add(key)
-            logger.warning(
-                "Audio suffix CUDA graph capture failed closed for M=%d and "
-                "%d sequences: %s",
-                key.rows,
-                key.cu_seqlens_numel - 1,
-                error,
-            )
-            if reference_output is not None:
-                return reference_output
+        if key_rejected:
             return self._eager(
                 encoder,
                 hidden_states,
@@ -398,6 +455,17 @@ class ExactShapeAudioSuffixGraphCache:
                 max_seqlen,
                 key.cu_seqlens_values,
             )
+
+        if entry is not None:
+            return self._replay_entry(entry, hidden_states)
+
+        return self._eager(
+            encoder,
+            hidden_states,
+            cu_seqlens,
+            max_seqlen,
+            key.cu_seqlens_values,
+        )
 
 
 def run_audio_suffix_cudagraph(
@@ -411,8 +479,14 @@ def run_audio_suffix_cudagraph(
     """Run an exact cached graph or the identical eager suffix."""
     cache = getattr(encoder, _CACHE_ATTR, None)
     if cache is None:
-        cache = ExactShapeAudioSuffixGraphCache()
-        setattr(encoder, _CACHE_ATTR, cache)
+        # The cache-map lock cannot help until one cache is attached. Serialize
+        # that one-time attachment so concurrent first calls cannot capture into
+        # different cache objects and discard one of them.
+        with _CACHE_CREATION_LOCK:
+            cache = getattr(encoder, _CACHE_ATTR, None)
+            if cache is None:
+                cache = ExactShapeAudioSuffixGraphCache()
+                setattr(encoder, _CACHE_ATTR, cache)
     if not isinstance(cache, ExactShapeAudioSuffixGraphCache):
         return run_audio_suffix_eager(
             encoder,

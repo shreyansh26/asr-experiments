@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import statistics
+import threading
 import time
 from typing import Callable
 
@@ -171,6 +173,105 @@ def _cuda_kernel_names(function: Callable[[], object]) -> list[str]:
     ]
 
 
+def _concurrent_same_key_gate(
+    encoder: torch.nn.Module,
+    cache: ExactShapeAudioSuffixGraphCache,
+    *,
+    segments: tuple[int, ...],
+    device: torch.device,
+    generator: torch.Generator,
+    iterations: int,
+) -> None:
+    """Race one admitted key from two host threads and CUDA streams."""
+    cu_seqlens, max_seqlen, cu_values = _cu_metadata(segments, device)
+    rows = sum(segments)
+    hidden_by_thread = [
+        [
+            torch.randn(
+                (rows, 1024),
+                dtype=torch.bfloat16,
+                device=device,
+                generator=generator,
+            )
+            for _ in range(iterations)
+        ]
+        for _ in range(2)
+    ]
+    with torch.inference_mode():
+        expected_by_thread = [
+            [
+                run_audio_suffix_eager(
+                    encoder,
+                    hidden_states,
+                    cu_seqlens,
+                    max_seqlen,
+                    cu_seqlens_values=cu_values,
+                )
+                for hidden_states in thread_inputs
+            ]
+            for thread_inputs in hidden_by_thread
+        ]
+    # Finish input production and eager references before the worker streams
+    # start. The race below therefore isolates cache replay transaction safety.
+    torch.cuda.synchronize(device)
+
+    streams = [torch.cuda.Stream(device=device) for _ in range(2)]
+    if streams[0].cuda_stream == streams[1].cuda_stream:
+        raise AssertionError("concurrency gate requires two distinct CUDA streams")
+    barrier = threading.Barrier(2)
+
+    def replay_many(
+        thread_index: int,
+        stream: torch.cuda.Stream,
+    ) -> list[torch.Tensor]:
+        torch.cuda.set_device(device)
+        outputs: list[torch.Tensor] = []
+        try:
+            with torch.inference_mode(), torch.cuda.stream(stream):
+                for hidden_states in hidden_by_thread[thread_index]:
+                    barrier.wait()
+                    outputs.append(
+                        cache.run(
+                            encoder,
+                            hidden_states,
+                            cu_seqlens,
+                            max_seqlen,
+                            cu_seqlens_values=cu_values,
+                        )
+                    )
+            stream.synchronize()
+            return outputs
+        except BaseException:
+            barrier.abort()
+            raise
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(replay_many, thread_index, stream)
+            for thread_index, stream in enumerate(streams)
+        ]
+        outputs_by_thread = [future.result() for future in futures]
+
+    # Compare only after all iterations so this also proves later replays did
+    # not overwrite an earlier caller's independently owned clone.
+    for thread_index, (outputs, expected_outputs) in enumerate(
+        zip(outputs_by_thread, expected_by_thread, strict=True)
+    ):
+        for iteration, (output, expected) in enumerate(
+            zip(outputs, expected_outputs, strict=True)
+        ):
+            if not torch.equal(output, expected):
+                raise AssertionError(
+                    "concurrent suffix replay is not bitwise exact for "
+                    f"thread={thread_index}, iteration={iteration}"
+                )
+
+    print(
+        "concurrency_gate=PASS threads=2 streams=2 "
+        f"iterations={iterations}"
+    )
+
+
 def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -184,14 +285,21 @@ def _main() -> None:
     )
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=10)
+    parser.add_argument("--concurrency-iterations", type=int, default=5)
     parser.add_argument("--master-port", type=int, default=29617)
     parser.add_argument("--seed", type=int, default=1234)
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required")
-    if args.warmup <= 0 or args.repeats <= 0:
-        raise ValueError("--warmup and --repeats must be positive")
+    if (
+        args.warmup <= 0
+        or args.repeats <= 0
+        or args.concurrency_iterations <= 0
+    ):
+        raise ValueError(
+            "--warmup, --repeats, and --concurrency-iterations must be positive"
+        )
     major, _ = torch.cuda.get_device_capability()
     if major != 9:
         raise RuntimeError("This production-shape gate requires an SM90 GPU")
@@ -355,6 +463,14 @@ def _main() -> None:
         raise AssertionError(
             f"expected {len(cases)} exact graph keys, got {cache.entry_count}"
         )
+    _concurrent_same_key_gate(
+        encoder,
+        cache,
+        segments=cases[0],
+        device=device,
+        generator=generator,
+        iterations=args.concurrency_iterations,
+    )
     print("gate=PASS_EXACT_AUDIO_SUFFIX_CUDAGRAPH")
 
 

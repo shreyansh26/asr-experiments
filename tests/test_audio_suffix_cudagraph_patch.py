@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
 import sys
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -57,12 +60,23 @@ class _FakeGraph:
 
 
 class _FakeBackend:
-    def __init__(self, *, capture_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        capture_error: Exception | None = None,
+        capture_delay: float = 0.0,
+        transaction_delay: float = 0.0,
+    ) -> None:
         self.capture_error = capture_error
+        self.capture_delay = capture_delay
+        self.transaction_delay = transaction_delay
         self.capture_calls = 0
         self.replay_calls = 0
         self.equal_calls = 0
-        self.stream_id = 17
+        self.active_transactions = 0
+        self.max_active_transactions = 0
+        self.execution_stream = object()
+        self._state_lock = threading.Lock()
 
     def supports(self, hidden_states, cu_seqlens, max_seqlen) -> bool:
         del hidden_states, cu_seqlens, max_seqlen
@@ -71,26 +85,45 @@ class _FakeBackend:
     def is_current_stream_capturing(self) -> bool:
         return False
 
-    def current_stream_id(self, device) -> int:
-        del device
-        return self.stream_id
-
     def capture(self, function, *, device, warmup_iterations):
         del device
-        self.capture_calls += 1
+        with self._state_lock:
+            self.capture_calls += 1
+        if self.capture_delay:
+            time.sleep(self.capture_delay)
         if self.capture_error is not None:
             raise self.capture_error
         for _ in range(warmup_iterations):
             function()
         output = function()
-        return _FakeGraph(function, output), output, self.stream_id
+        return _FakeGraph(function, output), output, self.execution_stream
 
     def replay(self, graph) -> None:
-        self.replay_calls += 1
+        with self._state_lock:
+            self.replay_calls += 1
         graph.replay()
 
+    def replay_and_clone(self, entry, hidden_states) -> torch.Tensor:
+        with self._state_lock:
+            self.active_transactions += 1
+            self.max_active_transactions = max(
+                self.max_active_transactions,
+                self.active_transactions,
+            )
+            self.replay_calls += 1
+        try:
+            entry.static_hidden_states.copy_(hidden_states)
+            if self.transaction_delay:
+                time.sleep(self.transaction_delay)
+            entry.graph.replay()
+            return entry.output.clone()
+        finally:
+            with self._state_lock:
+                self.active_transactions -= 1
+
     def equal(self, left, right) -> bool:
-        self.equal_calls += 1
+        with self._state_lock:
+            self.equal_calls += 1
         return torch.equal(left, right)
 
 
@@ -315,6 +348,175 @@ class AudioSuffixCudagraphPatchTest(unittest.TestCase):
         self.assertEqual(batched_output.shape, (264, 2048))
         self.assertEqual(cache.entry_count, 1)
         self.assertEqual(backend.capture_calls, 1)
+
+    def test_concurrent_first_wrapper_call_attaches_one_cache(self) -> None:
+        encoder = _FakeEncoder()
+        creation_count = 0
+        creation_lock = threading.Lock()
+
+        class _SlowCache:
+            def __init__(self) -> None:
+                nonlocal creation_count
+                time.sleep(0.02)
+                with creation_lock:
+                    creation_count += 1
+                self.run_calls = 0
+                self.run_lock = threading.Lock()
+
+            def run(
+                self,
+                encoder,
+                hidden_states,
+                cu_seqlens,
+                max_seqlen,
+                *,
+                cu_seqlens_values,
+            ) -> torch.Tensor:
+                del encoder, cu_seqlens, max_seqlen, cu_seqlens_values
+                with self.run_lock:
+                    self.run_calls += 1
+                return hidden_states.clone()
+
+        inputs_by_thread = [
+            _inputs((0, 88, 176, 264), fill=0.5),
+            _inputs((0, 88, 176, 264), fill=0.75),
+        ]
+        barrier = threading.Barrier(2)
+
+        def invoke(inputs) -> torch.Tensor:
+            barrier.wait()
+            return suffix_patch.run_audio_suffix_cudagraph(
+                encoder,
+                *inputs,
+                cu_seqlens_values=(0, 88, 176, 264),
+            )
+
+        with patch.object(
+            suffix_patch,
+            "ExactShapeAudioSuffixGraphCache",
+            _SlowCache,
+        ):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = [
+                    executor.submit(invoke, inputs)
+                    for inputs in inputs_by_thread
+                ]
+                outputs = [future.result() for future in futures]
+
+        attached_cache = getattr(encoder, suffix_patch._CACHE_ATTR)
+        self.assertEqual(creation_count, 1)
+        self.assertEqual(attached_cache.run_calls, 2)
+        for inputs, output in zip(inputs_by_thread, outputs, strict=True):
+            self.assertTrue(torch.equal(inputs[0], output))
+
+    def test_concurrent_cold_same_key_captures_once(self) -> None:
+        encoder = _FakeEncoder()
+        backend = _FakeBackend(capture_delay=0.02)
+        cache = suffix_patch.ExactShapeAudioSuffixGraphCache(
+            backend=backend,
+            max_entries=2,
+            warmup_iterations=1,
+        )
+        first_inputs = _inputs((0, 88, 176, 264), fill=0.5)
+        second_inputs = _inputs((0, 88, 176, 264), fill=0.75)
+        barrier = threading.Barrier(2)
+
+        def invoke(inputs) -> torch.Tensor:
+            with torch.inference_mode():
+                barrier.wait()
+                return cache.run(
+                    encoder,
+                    *inputs,
+                    cu_seqlens_values=(0, 88, 176, 264),
+                )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first_future = executor.submit(invoke, first_inputs)
+            second_future = executor.submit(invoke, second_inputs)
+            first_output = first_future.result()
+            second_output = second_future.result()
+
+        with torch.inference_mode():
+            first_expected = run_audio_suffix_eager(
+                encoder,
+                *first_inputs,
+                cu_seqlens_values=(0, 88, 176, 264),
+            )
+            second_expected = run_audio_suffix_eager(
+                encoder,
+                *second_inputs,
+                cu_seqlens_values=(0, 88, 176, 264),
+            )
+        self.assertTrue(torch.equal(first_output, first_expected))
+        self.assertTrue(torch.equal(second_output, second_expected))
+        self.assertEqual(backend.capture_calls, 1)
+        self.assertEqual(cache.entry_count, 1)
+
+    def test_concurrent_hot_same_key_transactions_are_serialized(self) -> None:
+        encoder = _FakeEncoder()
+        backend = _FakeBackend(transaction_delay=0.01)
+        cache = suffix_patch.ExactShapeAudioSuffixGraphCache(
+            backend=backend,
+            max_entries=2,
+            warmup_iterations=1,
+        )
+        initial_inputs = _inputs((0, 88, 176, 264), fill=0.25)
+        with torch.inference_mode():
+            cache.run(
+                encoder,
+                *initial_inputs,
+                cu_seqlens_values=(0, 88, 176, 264),
+            )
+
+        inputs_by_thread = [
+            [
+                _inputs((0, 88, 176, 264), fill=fill)
+                for fill in (0.5, 0.625, 0.75)
+            ],
+            [
+                _inputs((0, 88, 176, 264), fill=fill)
+                for fill in (1.0, 1.125, 1.25)
+            ],
+        ]
+        barrier = threading.Barrier(2)
+
+        def replay_many(inputs_list) -> list[torch.Tensor]:
+            outputs = []
+            with torch.inference_mode():
+                for inputs in inputs_list:
+                    barrier.wait()
+                    outputs.append(
+                        cache.run(
+                            encoder,
+                            *inputs,
+                            cu_seqlens_values=(0, 88, 176, 264),
+                        )
+                    )
+            return outputs
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(replay_many, inputs_list)
+                for inputs_list in inputs_by_thread
+            ]
+            outputs_by_thread = [future.result() for future in futures]
+
+        with torch.inference_mode():
+            for inputs_list, outputs in zip(
+                inputs_by_thread,
+                outputs_by_thread,
+                strict=True,
+            ):
+                for inputs, output in zip(inputs_list, outputs, strict=True):
+                    expected = run_audio_suffix_eager(
+                        encoder,
+                        *inputs,
+                        cu_seqlens_values=(0, 88, 176, 264),
+                    )
+                    self.assertTrue(torch.equal(output, expected))
+
+        self.assertEqual(backend.capture_calls, 1)
+        self.assertEqual(backend.max_active_transactions, 1)
 
     def test_capture_error_is_rejected_once_then_eager(self) -> None:
         encoder = _FakeEncoder()

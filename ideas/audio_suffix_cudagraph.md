@@ -74,10 +74,15 @@ Each admitted key retains stable hidden-state, `cu_seqlens`, `max_seqlen`, and
 graph-output tensors plus the `CUDAGraph` for the encoder lifetime. Because a
 later replay overwrites the stable graph output, every replay clones it after
 graph launch and returns independently owned `[M, 2048]` storage. Reuse is
-limited to the original caller CUDA stream. A different stream, unsupported
-layout, training/grad mode, nested capture, unexpected 24-layer/1024-wide
-contract, cache overflow, capture exception, or output other than `[M, 2048]`
-falls back to eager execution.
+safe across caller CUDA streams: each entry owns one execution stream, and a
+per-entry host lock serializes the enqueue transaction `input copy -> graph
+replay -> output clone`. Asynchronous caller-to-entry and entry-to-caller stream
+waits preserve producer/consumer ordering without a device synchronization on
+the hot path. A per-cache lock also serializes cold entry creation, and a
+one-time global lock prevents concurrent first calls from attaching different
+caches to the same encoder. An unsupported layout, training/grad mode, nested
+capture, unexpected 24-layer/1024-wide contract, cache overflow, capture
+exception, or output other than `[M, 2048]` falls back to eager execution.
 
 ## Admission and exactness
 
@@ -164,7 +169,9 @@ same sum to test different `cu_seqlens` contents. For every case it requires:
   copy from that ordering comparison;
 - one distinct admitted graph for every content key;
 - timing that includes both the required stable hidden-state input copy and the
-  independent output clone for replay.
+  independent output clone for replay;
+- repeated same-key calls from two host threads on two distinct CUDA streams,
+  with every retained output bitwise checked only after all replays finish.
 
 The timing table reports CUDA-event duration and synchronized host-call enqueue
 duration separately. CUDA-event replay numbers include the stable input copy,
@@ -174,6 +181,7 @@ construction, lookup, both copy enqueues, and graph launch.
 Required terminal line:
 
 ```text
+concurrency_gate=PASS threads=2 streams=2 iterations=5
 gate=PASS_EXACT_AUDIO_SUFFIX_CUDAGRAPH
 ```
 
